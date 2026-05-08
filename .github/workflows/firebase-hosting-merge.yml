@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
       - run: bun ci
       - run: bun run check
       - run: bun run build
@@ -21,4 +23,3 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MAIN_WEBSITE_398409 }}
           channelId: live
           projectId: main-website-398409
-          node-version: "24"
