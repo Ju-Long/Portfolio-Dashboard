@@ -1,0 +1,81 @@
+---
+---
+
+<button id="google-sign-in-btn" type="button" class="group relative inline-flex items-center gap-3 rounded-xl border border-neutral-700/60 bg-neutral-900 px-6 py-3 text-sm font-medium text-neutral-100 shadow-lg transition-all duration-200 hover:border-indigo-500/50 hover:bg-neutral-800 hover:shadow-indigo-500/10 active:scale-[0.97] [&.hide]:hidden cursor-pointer">
+    <svg class="h-5 w-5" viewBox="0 0 48 48">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+        <path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.003 24.003 0 0 0 0 21.56l7.98-6.19z"></path>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+    </svg>
+    Sign in with Google
+    <span class="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/5 transition-opacity duration-200 group-hover:ring-indigo-400/20"></span>
+</button>
+
+<div id="not-admin-overlay" class="pointer-events-none fixed inset-0 z-[9999] hidden items-center justify-center bg-black/70 backdrop-blur-sm [&.show]:flex">
+    <canvas id="confetti-canvas" class="absolute inset-0 h-full w-full"></canvas>
+    <h1 class="relative px-6 text-center text-5xl font-extrabold tracking-tight text-white drop-shadow-[0_4px_24px_rgba(99,102,241,0.6)] sm:text-7xl md:text-8xl">
+        You are not the admin!
+    </h1>
+</div>
+
+<script>
+    import { auth } from "@firebase/client";
+    import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+    import confetti from "canvas-confetti";
+
+    const loginButton = document.getElementById("google-sign-in-btn") as HTMLButtonElement;
+    const overlay = document.getElementById("not-admin-overlay") as HTMLDivElement;
+    const canvas = document.getElementById("confetti-canvas") as HTMLCanvasElement;
+
+    const fireConfetti = () => {
+        const myConfetti = confetti.create(canvas, { resize: true, useWorker: true });
+        const duration = 5000;
+        const end = Date.now() + duration;
+
+        (function frame() {
+            myConfetti({
+                particleCount: 6,
+                angle: 60,
+                spread: 75,
+                origin: { x: 0, y: 0.7 },
+                colors: ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6"],
+            });
+            myConfetti({
+                particleCount: 6,
+                angle: 120,
+                spread: 75,
+                origin: { x: 1, y: 0.7 },
+                colors: ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6"],
+            });
+            if (Date.now() < end) requestAnimationFrame(frame);
+        })();
+    };
+
+    let hasCelebrated = false;
+
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            loginButton.classList.add("hide");
+            if (!hasCelebrated) {
+                hasCelebrated = true;
+                overlay.classList.add("show");
+                fireConfetti();
+            }
+        } else {
+            loginButton.classList.remove("hide");
+            overlay.classList.remove("show");
+            hasCelebrated = false;
+        }
+
+        setTimeout(() => {
+            overlay.classList.remove("show");
+            hasCelebrated = false;
+        }, 3000);
+    });
+
+    loginButton.addEventListener("click", async () => {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+    });
+</script>

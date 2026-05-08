@@ -1,0 +1,27 @@
+---
+---
+
+<button id="open-add-project-btn" type="button" class="inline-flex items-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-300 transition hover:border-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-200 cursor-pointer [&.hide]:hidden hide">
+    <i class="fa-solid fa-plus"></i>
+    Add Project
+</button>
+
+<script>
+    import { auth } from "@firebase/client";
+    
+    import { showAddProjectModal } from "@/states";
+    
+    const openAddProjectBtn = document.getElementById("open-add-project-btn") as HTMLButtonElement;
+    
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            openAddProjectBtn.classList.remove("hide");
+        } else {
+            openAddProjectBtn.classList.add("hide");
+        }
+    })
+
+    openAddProjectBtn.addEventListener("click", () => {
+        showAddProjectModal.set(true);
+    })
+</script>

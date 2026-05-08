@@ -1,0 +1,53 @@
+---
+import Layout from "@layouts/Layout.astro";
+
+import AddProjectModal from "@views/AddProjectModal.astro";
+import EditProjectModal from "@views/EditProjectModal.astro";
+import EditSectionModal from "@views/EditSectionModal.astro";
+import PolicyEditorModal from "@views/PolicyEditorModal.astro";
+import AddToolModal from "@views/components/AddToolModal.astro";
+
+import Header from "@views/components/Header.astro";
+import ProjectGrid from "@views/ProjectGrid.astro";
+
+---
+
+<Layout title="Portfolio Admin">
+	<section id="dashboard-view" class="mx-auto max-w-7xl px-6 py-10">
+		<Header/>
+
+		<ProjectGrid/>
+	</section>
+
+	<AddProjectModal/>
+	<EditProjectModal/>
+	<EditSectionModal/>
+	<PolicyEditorModal/>
+	<AddToolModal/>
+
+	<script>
+		import { projects, sections, tools } from "@/states"
+
+		import { fetchApps, fetchAllSections, fetchTools } from "@firebase/sync";
+
+		async function init() {
+			const [fetched_apps, fetched_tools, fetched_sections] = await Promise.all([
+				fetchApps(),
+				fetchTools(),
+				fetchAllSections(),
+			]);
+
+			console.log("Apps:", fetched_apps);
+			console.log("Tools:", fetched_tools);
+			console.log("Sections:", fetched_sections);
+
+			projects.set(fetched_apps);
+			tools.set(fetched_tools);
+			sections.set(fetched_sections);
+		}
+
+		(async() => {
+			await init();
+		})()
+	</script>
+</Layout>

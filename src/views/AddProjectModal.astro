@@ -1,0 +1,136 @@
+---
+import ProjectFormFields from "./components/ProjectFormFields.astro";
+import ModalHeader from "./components/ModalHeader.astro";
+---
+
+<dialog id="add-project-modal" class="modal-dialog max-w-3xl">
+	<form id="add-project-form" class="flex max-h-[85vh] flex-col">
+		<ModalHeader title="Add Project"/>
+
+		<div class="modal-body space-y-6">
+			<ProjectFormFields />
+		</div>
+
+		<footer class="modal-footer justify-end">
+			<button type="button" data-close class="btn-secondary">
+				Cancel
+			</button>
+			<button type="submit" id="save-btn" class="btn-primary">
+				<i class="fa-solid fa-floppy-disk"></i>
+				<span data-save-label>Save</span>
+			</button>
+		</footer>
+	</form>
+</dialog>
+
+<script>
+	import type { AppTool } from "@model/app";
+	import { addAppBasicInfo } from "@firebase/sync";
+	import { firestore } from "@firebase/client";
+	import { doc } from "firebase/firestore";
+	import { projects, showAddProjectModal } from "@/states";
+
+	type ToolsPickerEl = HTMLElement & {
+		getSelected(): AppTool[];
+		clear(): void;
+	};
+	type ImageUploaderEl = HTMLElement & {
+		getFile(): File | null;
+		clear(): void;
+	};
+
+	const dialog = document.getElementById(
+		"add-project-modal",
+	) as HTMLDialogElement;
+	const form = document.getElementById("add-project-form") as HTMLFormElement;
+
+	const saveBtn = document.getElementById("save-btn") as HTMLButtonElement;
+	const saveLabel = saveBtn.querySelector("[data-save-label]") as HTMLSpanElement;
+
+	const coverUploader = dialog.querySelector(
+		'image-uploader[data-name="main-image"]',
+	) as ImageUploaderEl;
+	const toolsPicker = dialog.querySelector("tools-picker") as ToolsPickerEl;
+
+	function reset() {
+		form.reset();
+		coverUploader.clear();
+		toolsPicker.clear();
+		saveBtn.disabled = false;
+		saveLabel.textContent = "Save";
+	}
+
+	function open() {
+		reset();
+		if (!dialog.open) dialog.showModal();
+	}
+
+	function close() {
+		dialog.close();
+		showAddProjectModal.set(false);
+	}
+
+	const getVal = (name: string): string =>
+		(
+			(form.elements.namedItem(name) as HTMLInputElement | null)?.value ?? ""
+		).trim();
+
+	showAddProjectModal.listen((show) => {
+		if (show) open();
+	});
+	document.addEventListener("add-project-modal:open", () => open());
+
+	dialog.addEventListener("close", () => {
+		showAddProjectModal.set(false);
+	});
+
+	dialog.querySelectorAll("[data-close]").forEach((el) => {
+		el.addEventListener("click", () => close());
+	});
+
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		if (!form.checkValidity()) {
+			form.reportValidity();
+			return;
+		}
+		const mainFile = coverUploader.getFile();
+		if (!mainFile) {
+			alert("Cover image is required");
+			return;
+		}
+
+		saveBtn.disabled = true;
+		saveLabel.textContent = "Saving…";
+
+		try {
+			const selectedTools = toolsPicker.getSelected();
+			const toolRefs = selectedTools.map((t) =>
+				doc(firestore, "tools", t.id),
+			);
+
+			const apple = getVal("apple_link");
+			const web = getVal("web_link");
+			const github = getVal("github_link");
+
+			const created = await addAppBasicInfo(
+				getVal("page"),
+				getVal("name"),
+				getVal("description"),
+				apple || null,
+				web || null,
+				github || null,
+				mainFile,
+				toolRefs,
+			);
+
+			projects.set([...projects.get(), created]);
+			close();
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+			saveBtn.disabled = false;
+			saveLabel.textContent = "Save";
+		}
+	});
+</script>

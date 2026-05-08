@@ -1,0 +1,163 @@
+---
+import ModalHeader from "./components/ModalHeader.astro";
+---
+
+<dialog id="policy-editor-modal" class="modal-dialog max-w-3xl">
+	<form id="policy-editor-form" class="flex max-h-[85vh] flex-col">
+		<ModalHeader title="Policy Editor"/>
+
+		<div class="flex items-center gap-2 border-b border-neutral-800 px-6 py-2 text-xs text-neutral-400">
+			<span data-policy-project-name></span>
+			<span data-policy-loading class="hidden">
+				<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>
+				Loading…
+			</span>
+		</div>
+
+		<div class="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+			<label class="block">
+				<span class="modal-legend mb-1 block">
+					Privacy Policy
+					<span class="ml-1 font-normal normal-case text-neutral-600">(markdown)</span>
+				</span>
+				<textarea
+					name="privacy-policy"
+					rows="14"
+					placeholder="# Privacy Policy&#10;&#10;Write markdown here…"
+					class="field-input-mono block resize-y"
+				></textarea>
+			</label>
+
+			<label class="block">
+				<span class="modal-legend mb-1 block">
+					Terms of Use
+					<span class="ml-1 font-normal normal-case text-neutral-600">(markdown)</span>
+				</span>
+				<textarea
+					name="terms-of-use"
+					rows="14"
+					placeholder="# Terms of Use&#10;&#10;Write markdown here…"
+					class="field-input-mono block resize-y"
+				></textarea>
+			</label>
+		</div>
+
+		<footer class="modal-footer justify-end">
+			<button type="button" data-close class="btn-secondary">
+				Cancel
+			</button>
+			<button type="submit" id="policy-submit-btn" class="btn-primary">
+				<i class="fa-solid fa-floppy-disk"></i>
+				<span data-policy-submit-label>Save Policies</span>
+			</button>
+		</footer>
+	</form>
+</dialog>
+
+<script>
+	import {
+		getPrivacyPolicy,
+		getTermsOfUse,
+		setPrivacyPolicy,
+		setTermsOfUse,
+	} from "@firebase/sync";
+	import { projects, showEditPolicyModal } from "@/states";
+	import type { App } from "@model/app";
+
+	const dialog = document.getElementById("policy-editor-modal") as HTMLDialogElement;
+	const form = document.getElementById("policy-editor-form") as HTMLFormElement;
+	const submitBtn = document.getElementById("policy-submit-btn") as HTMLButtonElement;
+	const submitLabel = submitBtn.querySelector(
+		"[data-policy-submit-label]",
+	) as HTMLSpanElement;
+	const nameLabel = dialog.querySelector(
+		"[data-policy-project-name]",
+	) as HTMLSpanElement;
+	const loadingLabel = dialog.querySelector(
+		"[data-policy-loading]",
+	) as HTMLSpanElement;
+
+	const privacyTa = form.elements.namedItem("privacy-policy") as HTMLTextAreaElement;
+	const termsTa = form.elements.namedItem("terms-of-use") as HTMLTextAreaElement;
+
+	let currentId: string | null = null;
+	let loading = false;
+
+	async function open(id: string) {
+		const project = projects.get().find((p: App) => p.id === id);
+		if (!project) {
+			showEditPolicyModal.set(null);
+			return;
+		}
+		currentId = project.id;
+		nameLabel.textContent = project.name ? `· ${project.name}` : "";
+		privacyTa.value = "";
+		termsTa.value = "";
+		submitBtn.disabled = false;
+		submitLabel.textContent = "Save Policies";
+
+		loading = true;
+		loadingLabel.classList.remove("hidden");
+		if (!dialog.open) dialog.showModal();
+
+		try {
+			const [privacy, terms] = await Promise.all([
+				getPrivacyPolicy(project.id),
+				getTermsOfUse(project.id),
+			]);
+			privacyTa.value = privacy;
+			termsTa.value = terms;
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+		} finally {
+			loading = false;
+			loadingLabel.classList.add("hidden");
+		}
+	}
+
+	function close() {
+		dialog.close();
+		showEditPolicyModal.set(null);
+		currentId = null;
+	}
+
+	showEditPolicyModal.listen((id: string | null) => {
+		if (id) open(id);
+	});
+
+	dialog.addEventListener("close", () => {
+		showEditPolicyModal.set(null);
+		currentId = null;
+	});
+
+	dialog.querySelectorAll("[data-close]").forEach((el) => {
+		el.addEventListener("click", () => close());
+	});
+
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		if (!currentId) return;
+		if (loading) {
+			alert("Still loading existing policies. Please wait.");
+			return;
+		}
+
+		submitBtn.disabled = true;
+		submitLabel.textContent = "Saving…";
+
+		const id = currentId;
+		try {
+			await Promise.all([
+				setPrivacyPolicy(id, privacyTa.value),
+				setTermsOfUse(id, termsTa.value),
+			]);
+			close();
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+			submitBtn.disabled = false;
+			submitLabel.textContent = "Save Policies";
+		}
+	});
+</script>

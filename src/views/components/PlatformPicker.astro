@@ -1,0 +1,102 @@
+---
+---
+
+<platform-picker class="relative block">
+	<span class="field-label-sm">Platform</span>
+	<button type="button" data-platform-trigger class="flex w-full items-center justify-between rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-left text-sm text-neutral-300 transition hover:border-neutral-700">
+		<span class="flex items-center gap-2" data-platform-label>
+			<span class="text-neutral-500">Select platform…</span>
+		</span>
+		<i class="fa-solid fa-chevron-down text-xs text-neutral-500"></i>
+	</button>
+	<div data-platform-dropdown class="absolute left-0 right-0 top-full z-10 mt-1 hidden max-h-48 overflow-y-auto rounded-md border border-neutral-800 bg-neutral-900 p-1 shadow-xl">
+	</div>
+</platform-picker>
+
+<script>
+	import type { Platform } from "@model/app";
+	import { platforms } from "@model/platforms";
+
+	class PlatformPicker extends HTMLElement {
+		private _platforms: Platform[] = [];
+		private _selected: Platform | null = null;
+		private _onDocClick = (e: MouseEvent) => {
+			if (!this.contains(e.target as Node)) {
+				this._dropdown?.classList.add("hidden");
+			}
+		};
+		private _trigger!: HTMLButtonElement;
+		private _dropdown!: HTMLDivElement;
+		private _label!: HTMLSpanElement;
+
+		connectedCallback() {
+			this._platforms = platforms;
+
+			this._trigger = this.querySelector(
+				"[data-platform-trigger]",
+			) as HTMLButtonElement;
+			this._dropdown = this.querySelector(
+				"[data-platform-dropdown]",
+			) as HTMLDivElement;
+			this._label = this.querySelector(
+				"[data-platform-label]",
+			) as HTMLSpanElement;
+
+			this._trigger.addEventListener("click", () =>
+				this._dropdown.classList.toggle("hidden"),
+			);
+			document.addEventListener("click", this._onDocClick);
+
+			this.renderDropdown();
+		}
+
+		disconnectedCallback() {
+			document.removeEventListener("click", this._onDocClick);
+		}
+
+		getSelected(): Platform | null {
+			return this._selected;
+		}
+
+		setSelected(platform: Platform): void {
+			const match = this._platforms.find((p) => p.name === platform.name);
+			if (!match) return;
+			this._selected = match;
+			this._label.innerHTML = `
+				${match.icon ? `<i class="${match.icon} text-neutral-400"></i>` : ""}
+				<span class="text-neutral-200">${match.name}</span>
+			`;
+		}
+
+		private renderDropdown() {
+			this._dropdown.innerHTML = "";
+			if (this._platforms.length === 0) {
+				this._dropdown.innerHTML = `<div class="px-2 py-1.5 text-xs text-neutral-500">No platforms available</div>`;
+				return;
+			}
+			this._platforms.forEach((platform) => {
+				const opt = document.createElement("button");
+				opt.type = "button";
+				opt.className =
+					"flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm text-neutral-200 transition hover:bg-neutral-800";
+				opt.innerHTML = `
+					${platform.icon ? `<i class="${platform.icon} text-neutral-400"></i>` : ""}
+					<span>${platform.name}</span>
+				`;
+				opt.addEventListener("click", () => {
+					this._selected = platform;
+					this._label.innerHTML = `
+						${platform.icon ? `<i class="${platform.icon} text-neutral-400"></i>` : ""}
+						<span class="text-neutral-200">${platform.name}</span>
+					`;
+					this._dropdown.classList.add("hidden");
+				});
+				this._dropdown.appendChild(opt);
+			});
+		}
+	}
+
+	if (!customElements.get("platform-picker")) {
+		customElements.define("platform-picker", PlatformPicker);
+	}
+</script>

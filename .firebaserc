@@ -1,0 +1,11 @@
+{
+  "projects": {
+    "default": "main-website-398409"
+  },
+  "targets": {
+    "main-website-398409": {
+      "hosting": {}
+    }
+  },
+  "etags": {}
+}

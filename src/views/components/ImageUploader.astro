@@ -1,0 +1,130 @@
+---
+interface Props {
+	name: string;
+	multiple?: boolean;
+	accept?: string;
+	label?: string;
+	preview?: boolean;
+}
+
+const {
+	name,
+	multiple = false,
+	accept = "image/*",
+	label = 'Drag & drop an image or <span class="filepond--label-action">browse</span>',
+	preview = true,
+} = Astro.props;
+---
+
+<image-uploader data-name={name} data-multiple={multiple ? "" : null} data-accept={accept} data-label={label} data-preview={preview ? null : ""}>
+	<input type="file" accept={accept} multiple={multiple || undefined} />
+</image-uploader>
+
+<script>
+	import "filepond/dist/filepond.min.css";
+	import "filepond-plugin-image-preview/dist/filepond-plugin-image-preview.min.css";
+
+	import * as FilePond from "filepond";
+	import FilePondPluginImagePreview from "filepond-plugin-image-preview";
+	import FilePondPluginFileValidateType from "filepond-plugin-file-validate-type";
+
+	let registered = false;
+	function ensureRegistered() {
+		if (registered) return;
+		FilePond.registerPlugin(FilePondPluginImagePreview);
+		FilePond.registerPlugin(FilePondPluginFileValidateType);
+		registered = true;
+	}
+
+	function deriveFilename(url: string): string {
+		try {
+			const pathname = new URL(url).pathname;
+			const last = pathname.split("/").pop() || "file";
+			return decodeURIComponent(last);
+		} catch {
+			return "file";
+		}
+	}
+
+	async function urlToFile(url: string): Promise<File> {
+		const response = await fetch(url);
+		if (!response.ok) {
+			throw new Error(`Failed to fetch ${url}: HTTP ${response.status}`);
+		}
+		const blob = await response.blob();
+		const filename = deriveFilename(url);
+		const type = blob.type || "application/octet-stream";
+		return new File([blob], filename, { type });
+	}
+
+	class ImageUploader extends HTMLElement {
+		private _pond: FilePond.FilePond | null = null;
+
+		connectedCallback() {
+			ensureRegistered();
+			const input = this.querySelector("input") as HTMLInputElement | null;
+			if (!input) return;
+
+			const multiple = this.dataset.multiple !== undefined;
+			const accept = this.dataset.accept ?? "image/*";
+			const label =
+				this.dataset.label ??
+				'Drag & drop an image or <span class="filepond--label-action">browse</span>';
+			const preview = this.dataset.preview === undefined;
+
+			this._pond = FilePond.create(input, {
+				allowMultiple: multiple,
+				acceptedFileTypes: [accept],
+				storeAsFile: true,
+				labelIdle: label,
+				allowImagePreview: preview,
+			});
+		}
+
+		disconnectedCallback() {
+			this._pond?.destroy();
+			this._pond = null;
+		}
+
+		getFile(): File | null {
+			const f = this._pond?.getFile();
+			return (f?.file as File | undefined) ?? null;
+		}
+
+		getFiles(): File[] {
+			const files = this._pond?.getFiles() ?? [];
+			return files.map((f) => f.file as File);
+		}
+
+		getEntries(): Array<{ file?: File; url?: string }> {
+			const files = this._pond?.getFiles() ?? [];
+			return files.map((f) => {
+				const url = f.getMetadata("existingUrl");
+				if (typeof url === "string") return { url };
+				return { file: f.file as File };
+			});
+		}
+
+		async loadExisting(urls: string[]): Promise<void> {
+			if (!this._pond) return;
+			for (const url of urls) {
+				try {
+					const file = await urlToFile(url);
+					await this._pond.addFile(file, {
+						metadata: { existingUrl: url },
+					});
+				} catch (err) {
+					console.error("Failed to load existing file:", url, err);
+				}
+			}
+		}
+
+		clear(): void {
+			this._pond?.removeFiles();
+		}
+	}
+
+	if (!customElements.get("image-uploader")) {
+		customElements.define("image-uploader", ImageUploader);
+	}
+</script>

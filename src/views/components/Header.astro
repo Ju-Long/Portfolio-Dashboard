@@ -1,0 +1,29 @@
+---
+import AddProjectButton from "./AddProjectButton.astro";
+import AuthenticateButton from "./AuthenticateButton.astro";
+---
+
+<header class="flex items-center justify-between gap-4">
+    <div>
+        <h1 class="text-2xl font-semibold tracking-tight">
+            <i class="fa-solid fa-gauge-high mr-2 text-indigo-400"></i>
+            Projects
+        </h1>
+        <p id="projects-count" class="mt-1 text-sm text-neutral-400">
+            0 projects in the portfolio.
+        </p>
+    </div>
+
+    <AuthenticateButton />
+
+    <AddProjectButton/>
+</header>
+
+<script>
+    import { projects } from "@/states";
+
+    const projectsCount = document.getElementById("projects-count") as HTMLElement;
+    projects.listen((projects) => {
+        projectsCount.textContent = `${projects.length} ${projects.length === 1 ? "project" : "projects"} in the portfolio.`;
+    });
+</script>

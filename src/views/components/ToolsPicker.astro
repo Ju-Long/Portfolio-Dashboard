@@ -1,0 +1,153 @@
+---
+---
+
+<tools-picker class="relative block">
+	<div class="flex items-stretch gap-2">
+		<button type="button" data-tools-trigger class="flex flex-1 items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-left text-sm text-neutral-300 transition hover:border-neutral-700">
+			<span data-tools-label>Select tools…</span>
+			<i class="fa-solid fa-chevron-down text-xs text-neutral-500"></i>
+		</button>
+		<button type="button" data-tools-add aria-label="Add custom tool" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-300 transition hover:border-neutral-700 hover:text-neutral-100">
+			<i class="fa-solid fa-plus text-sm"></i>
+		</button>
+	</div>
+	<div data-tools-dropdown class="absolute left-0 right-0 top-full z-10 mt-1 hidden max-h-60 overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-900 p-1 shadow-xl"></div>
+	<div data-tools-chips class="mt-2 flex flex-wrap gap-1.5"></div>
+</tools-picker>
+
+<script>
+	import type { AppTool } from "@model/app";
+	import { tools as toolsStore } from "@/states";
+
+	class ToolsPicker extends HTMLElement {
+		private _tools: readonly AppTool[] = [];
+		private _selected = new Set<string>();
+		private _onDocClick = (e: MouseEvent) => {
+			if (!this.contains(e.target as Node)) {
+				this._dropdown?.classList.add("hidden");
+			}
+		};
+		private _unsubscribe?: () => void;
+		private _trigger!: HTMLButtonElement;
+		private _dropdown!: HTMLDivElement;
+		private _label!: HTMLSpanElement;
+		private _chips!: HTMLDivElement;
+		private _addBtn!: HTMLButtonElement;
+
+		connectedCallback() {
+			this._trigger = this.querySelector(
+				"[data-tools-trigger]",
+			) as HTMLButtonElement;
+			this._dropdown = this.querySelector(
+				"[data-tools-dropdown]",
+			) as HTMLDivElement;
+			this._label = this.querySelector(
+				"[data-tools-label]",
+			) as HTMLSpanElement;
+			this._chips = this.querySelector(
+				"[data-tools-chips]",
+			) as HTMLDivElement;
+			this._addBtn = this.querySelector(
+				"[data-tools-add]",
+			) as HTMLButtonElement;
+
+			this._trigger.addEventListener("click", () =>
+				this._dropdown.classList.toggle("hidden"),
+			);
+			this._addBtn.addEventListener("click", () => {
+				this._dropdown.classList.add("hidden");
+				document.dispatchEvent(new CustomEvent("add-tool-modal:open"));
+			});
+			document.addEventListener("click", this._onDocClick);
+
+			this._unsubscribe = toolsStore.subscribe((value) => {
+				this._tools = value;
+				this.renderDropdown();
+				this.renderChips();
+			});
+		}
+
+		disconnectedCallback() {
+			document.removeEventListener("click", this._onDocClick);
+			this._unsubscribe?.();
+		}
+
+		getSelected(): AppTool[] {
+			return this._tools.filter((t) => this._selected.has(t.id));
+		}
+
+		setSelected(selected: AppTool[]): void {
+			this._selected.clear();
+			for (const t of selected) this._selected.add(t.id);
+			this.renderDropdown();
+			this.renderChips();
+		}
+
+		clear(): void {
+			this._selected.clear();
+			this.renderDropdown();
+			this.renderChips();
+		}
+
+		private renderDropdown() {
+			this._dropdown.innerHTML = "";
+			if (this._tools.length === 0) {
+				this._dropdown.innerHTML = `<div class="px-2 py-1.5 text-xs text-neutral-500">No tools available</div>`;
+				return;
+			}
+			for (const tool of this._tools) {
+				const opt = document.createElement("button");
+				opt.type = "button";
+				opt.className =
+					"flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-neutral-200 transition hover:bg-neutral-800";
+				const checked = this._selected.has(tool.id);
+				opt.innerHTML = `
+					<span class="grid h-4 w-4 place-items-center rounded border border-neutral-700 ${checked ? "bg-indigo-500 border-indigo-500" : "bg-neutral-950"}">
+						${checked ? '<i class="fa-solid fa-check text-[9px] text-white"></i>' : ""}
+					</span>
+					${tool.icon ? `<img src="${tool.icon}" alt="${tool.name}" class="h-4 aspect-auto"/>` : ""}
+					<span>${tool.name}</span>
+				`;
+				opt.addEventListener("click", () => {
+					if (this._selected.has(tool.id)) this._selected.delete(tool.id);
+					else this._selected.add(tool.id);
+					this.renderDropdown();
+					this.renderChips();
+				});
+				this._dropdown.appendChild(opt);
+			}
+		}
+
+		private renderChips() {
+			this._chips.innerHTML = "";
+			const selected = this._tools.filter((t) => this._selected.has(t.id));
+			if (selected.length === 0) {
+				this._label.textContent = "Select tools…";
+				return;
+			}
+			this._label.textContent = `${selected.length} selected`;
+			for (const tool of selected) {
+				const chip = document.createElement("span");
+				chip.className =
+					"inline-flex items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-xs text-neutral-300";
+				chip.innerHTML = `
+					${tool.icon ? `<img src="${tool.icon}" alt="${tool.name}" class="h-3 aspect-auto"/>` : ""}
+					<span>${tool.name}</span>
+					<button type="button" class="text-neutral-500 hover:text-rose-400" aria-label="Remove">
+						<i class="fa-solid fa-xmark text-[9px]"></i>
+					</button>
+				`;
+				chip.querySelector("button")?.addEventListener("click", () => {
+					this._selected.delete(tool.id);
+					this.renderDropdown();
+					this.renderChips();
+				});
+				this._chips.appendChild(chip);
+			}
+		}
+	}
+
+	if (!customElements.get("tools-picker")) {
+		customElements.define("tools-picker", ToolsPicker);
+	}
+</script>

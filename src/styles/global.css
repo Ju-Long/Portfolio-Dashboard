@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* Form fields */
+.field-input {
+	@apply w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none transition focus:border-indigo-500;
+}
+.field-input-md {
+	@apply w-full rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-sm text-neutral-100 outline-none focus:border-indigo-500;
+}
+.field-input-sm {
+	@apply w-full rounded border border-neutral-800 bg-neutral-950 px-2 py-1 text-sm text-neutral-100 outline-none focus:border-indigo-500;
+}
+.field-input-mono {
+	@apply w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none transition focus:border-indigo-500 font-mono leading-relaxed;
+}
+.field-select-md {
+	@apply w-full rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-sm text-neutral-100 outline-none focus:border-indigo-500 appearance-none;
+}
+
+.field-label {
+	@apply mb-1 block text-sm text-neutral-300;
+}
+.field-label-sm {
+	@apply mb-1 block text-xs text-neutral-400;
+}
+.field-label-xs {
+	@apply mb-1 block text-[11px] text-neutral-500;
+}
+
+.modal-legend {
+	@apply text-xs font-semibold uppercase tracking-wider text-neutral-500;
+}
+
+/* Buttons */
+.btn-primary {
+	@apply inline-flex items-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-500/20 px-4 py-2 text-sm font-medium text-indigo-200 transition hover:border-indigo-400 hover:bg-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-60;
+}
+.btn-secondary {
+	@apply rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-2 text-sm text-neutral-300 transition hover:border-neutral-700 hover:text-neutral-100;
+}
+.btn-danger {
+	@apply inline-flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-300 transition hover:border-rose-400 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+/* Modal layout */
+.modal-dialog {
+	@apply m-auto w-full rounded-2xl border border-neutral-800 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm;
+}
+.modal-body {
+	@apply flex-1 overflow-y-auto px-6 py-5;
+}
+.modal-footer {
+	@apply flex items-center gap-2 border-t border-neutral-800 px-6 py-4;
+}
+
+/* FilePond overrides — global */
+.filepond--root {
+	margin-bottom: 0;
+}
+.filepond--panel-root {
+	background-color: rgb(23 23 23) !important;
+	border: 1px solid rgb(38 38 38);
+	border-radius: 0.5rem;
+}
+.filepond--drop-label {
+	color: rgb(163 163 163) !important;
+}
+.filepond--label-action {
+	text-decoration-color: rgb(99 102 241);
+	color: rgb(165 180 252);
+}

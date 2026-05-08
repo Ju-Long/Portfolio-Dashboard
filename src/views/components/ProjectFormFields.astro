@@ -1,0 +1,59 @@
+---
+import ImageUploader from "./ImageUploader.astro";
+import ToolsPicker from "./ToolsPicker.astro";
+---
+
+<fieldset class="space-y-4">
+	<legend class="modal-legend">Basic Info</legend>
+
+	<div class="grid grid-cols-2 gap-4">
+		<label class="block">
+			<span class="field-label">Name</span>
+			<input name="name" type="text" required class="field-input" autocomplete="off"/>
+		</label>
+
+		<label class="block">
+			<span class="field-label">Page (slug)</span>
+			<input name="page" type="text" required placeholder="my-app" class="field-input font-mono" autocomplete="off"/>
+		</label>
+	</div>
+
+	<label class="block">
+		<span class="field-label">Description</span>
+		<textarea name="description" rows="3" required class="field-input resize-y"></textarea>
+	</label>
+
+	<div class="grid grid-cols-3 gap-4">
+		<label class="block">
+			<span class="field-label">
+				<i class="fa-brands fa-apple mr-1"></i>Apple link
+			</span>
+			<input name="apple_link" type="url" class="field-input" autocomplete="url"/>
+		</label>
+		<label class="block">
+			<span class="field-label">
+				<i class="fa-solid fa-globe mr-1"></i>Web link
+			</span>
+			<input name="web_link" type="url" class="field-input" autocomplete="url"/>
+		</label>
+		<label class="block">
+			<span class="field-label">
+				<i class="fa-brands fa-github mr-1"></i>GitHub link
+			</span>
+			<input name="github_link" type="url" class="field-input" autocomplete="url"/>
+		</label>
+	</div>
+</fieldset>
+
+<fieldset>
+	<legend class="modal-legend mb-2 block">
+		App Icon
+		<slot name="icon-legend-extra" />
+	</legend>
+	<ImageUploader name="main-image" />
+</fieldset>
+
+<fieldset>
+	<legend class="modal-legend mb-2 block">Tools</legend>
+	<ToolsPicker />
+</fieldset>

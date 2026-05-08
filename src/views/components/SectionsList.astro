@@ -1,0 +1,479 @@
+---
+import ImageUploader from "./ImageUploader.astro";
+import PlatformPicker from "./PlatformPicker.astro";
+---
+
+<sections-list class="block">
+	<div class="mb-2 flex items-center justify-between">
+		<legend class="modal-legend">
+			Sections
+		</legend>
+		<button type="button" data-add-section class="inline-flex items-center gap-1.5 rounded-md border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs text-neutral-300 transition hover:border-neutral-700 hover:text-neutral-100">
+			<i class="fa-solid fa-plus text-[10px]"></i>
+			Add Section
+		</button>
+	</div>
+	<div data-sections-container class="space-y-3"></div>
+
+	<template data-section-template>
+		<div data-section class="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+			<div class="mb-3 flex items-center justify-between gap-2">
+				<button type="button" data-section-toggle class="flex flex-1 items-center gap-2 text-left" aria-label="Toggle section">
+					<i data-section-chevron class="fa-solid fa-chevron-down text-xs text-neutral-500 transition-transform"></i>
+					<span class="text-sm font-medium text-neutral-200" data-section-title>Section</span>
+				</button>
+				<button type="button" data-remove-section class="rounded-md p-1 text-neutral-500 transition hover:bg-neutral-800 hover:text-rose-400" aria-label="Remove section">
+					<i class="fa-solid fa-trash text-xs"></i>
+				</button>
+			</div>
+
+			<div data-section-body class="space-y-3">
+				<div class="grid grid-cols-2 gap-3">
+					<label class="block">
+						<span class="field-label-sm">Title</span>
+						<input data-section-field="title" type="text" class="field-input-md"/>
+					</label>
+					<label class="block">
+						<span class="field-label-sm">Feature type</span>
+						<select data-section-field="feature_type" class="field-select-md">
+							<option value="slides">slides</option>
+							<option value="frames">frames</option>
+						</select>
+					</label>
+				</div>
+
+				<label class="block">
+					<span class="field-label-sm">Description</span>
+					<textarea data-section-field="description" rows="2" class="field-input-md resize-y"></textarea>
+				</label>
+
+				<PlatformPicker />
+
+				<div>
+					<div class="mb-1.5 flex items-center justify-between">
+						<span class="text-xs text-neutral-400">Features</span>
+						<button type="button" data-add-feature class="inline-flex items-center gap-1 rounded border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[11px] text-neutral-300 transition hover:border-neutral-700 hover:text-neutral-100">
+							<i class="fa-solid fa-plus text-[9px]"></i>
+							Add Feature
+						</button>
+					</div>
+					<div data-features-container class="space-y-2"></div>
+				</div>
+			</div>
+		</div>
+	</template>
+
+	<template data-feature-template>
+		<div data-feature class="rounded-lg border border-neutral-800 bg-neutral-950/60 p-3">
+			<div class="mb-2 flex items-center justify-between">
+				<span class="text-xs text-neutral-400" data-feature-title>Feature</span>
+				<button type="button" data-remove-feature class="rounded p-1 text-neutral-500 transition hover:bg-neutral-800 hover:text-rose-400" aria-label="Remove feature">
+					<i class="fa-solid fa-xmark text-[10px]"></i>
+				</button>
+			</div>
+			<div class="space-y-2">
+				<div data-feature-text class="space-y-2">
+					<input data-feature-field="title" type="text" placeholder="Title" class="field-input-sm"/>
+					<textarea data-feature-field="description" rows="2" placeholder="Description" class="field-input-sm resize-y"></textarea>
+				</div>
+				<div data-feature-image>
+					<span class="field-label-xs">Image</span>
+					<ImageUploader name="feature-image" label='Drop image or <span class="filepond--label-action">browse</span>'/>
+				</div>
+				<div data-feature-frames class="hidden">
+					<span class="field-label-xs">Frames</span>
+					<ImageUploader name="feature-frames" multiple label='Drop frames or <span class="filepond--label-action">browse</span>'/>
+				</div>
+			</div>
+		</div>
+	</template>
+</sections-list>
+
+<script>
+	import { platforms } from "@model/platforms";
+
+	import type { AppSection, Platform } from "@model/app";
+
+	type ImageUploaderEl = HTMLElement & {
+		getFile(): File | null;
+		getFiles(): File[];
+		getEntries(): Array<{ file?: File; url?: string }>;
+		loadExisting(urls: string[]): Promise<void>;
+	};
+	type PlatformPickerEl = HTMLElement & {
+		getSelected(): Platform | null;
+		setSelected(platform: Platform): void;
+	};
+
+	class SectionsList extends HTMLElement {
+		private _container!: HTMLDivElement;
+		private _sectionTemplate!: HTMLTemplateElement;
+		private _featureTemplate!: HTMLTemplateElement;
+
+		connectedCallback() {
+			this._container = this.querySelector(
+				"[data-sections-container]",
+			) as HTMLDivElement;
+			this._sectionTemplate = this.querySelector(
+				"[data-section-template]",
+			) as HTMLTemplateElement;
+			this._featureTemplate = this.querySelector(
+				"[data-feature-template]",
+			) as HTMLTemplateElement;
+
+			this.querySelector("[data-add-section]")?.addEventListener(
+				"click",
+				() => this.addSection(),
+			);
+		}
+
+		getSectionsForUpload(): Array<{
+			title: string;
+			description: string;
+			platform: Platform;
+			feature_type: "slides" | "frames";
+			features: Array<{
+				title: string | null;
+				description: string | null;
+				image: File | null;
+				frames: File[] | null;
+			}>;
+		}> {
+			const sectionEls = Array.from(
+				this._container.querySelectorAll<HTMLElement>(":scope > [data-section]"),
+			);
+			return sectionEls.map((sectionEl, i) => {
+				const titleEl = sectionEl.querySelector(
+					'[data-section-field="title"]',
+				) as HTMLInputElement;
+				const descEl = sectionEl.querySelector(
+					'[data-section-field="description"]',
+				) as HTMLTextAreaElement;
+				const ftEl = sectionEl.querySelector(
+					'[data-section-field="feature_type"]',
+				) as HTMLSelectElement;
+
+				const platformPicker = sectionEl.querySelector(
+					"platform-picker",
+				) as PlatformPickerEl | null;
+				const platform = platformPicker?.getSelected() ?? null;
+				if (!platform) {
+					throw new Error(`Section ${i + 1}: select a platform`);
+				}
+
+				const feature_type = ftEl.value as "slides" | "frames";
+
+				const featureEls = Array.from(
+					sectionEl.querySelectorAll<HTMLElement>(
+						":scope [data-features-container] > [data-feature]",
+					),
+				);
+
+				const features = featureEls.map((featureEl) => {
+					const ft = featureEl.querySelector(
+						'[data-feature-field="title"]',
+					) as HTMLInputElement;
+					const fdesc = featureEl.querySelector(
+						'[data-feature-field="description"]',
+					) as HTMLTextAreaElement;
+
+					if (feature_type === "frames") {
+						const framesUploader = featureEl.querySelector(
+							"[data-feature-frames] image-uploader",
+						) as ImageUploaderEl | null;
+						const files = framesUploader?.getFiles() ?? [];
+						return {
+							title: ft.value.trim() || null,
+							description: fdesc.value.trim() || null,
+							image: null,
+							frames: files.length ? files : null,
+						};
+					}
+
+					const imageUploader = featureEl.querySelector(
+						"[data-feature-image] image-uploader",
+					) as ImageUploaderEl | null;
+					const file = imageUploader?.getFile() ?? null;
+					return {
+						title: null,
+						description: null,
+						image: file,
+						frames: null,
+					};
+				});
+
+				return {
+					title: titleEl.value.trim(),
+					description: descEl.value.trim(),
+					platform,
+					feature_type,
+					features,
+				};
+			});
+		}
+
+		getSectionsForEdit(): Array<{
+			id?: string;
+			title: string;
+			description: string;
+			platform: Platform;
+			feature_type: "slides" | "frames";
+			features: Array<{
+				title: string | null;
+				description: string | null;
+				image: File | string | null;
+				frames: (File | string)[] | null;
+			}>;
+		}> {
+			const sectionEls = Array.from(
+				this._container.querySelectorAll<HTMLElement>(":scope > [data-section]"),
+			);
+			return sectionEls.map((sectionEl, i) => {
+				const titleEl = sectionEl.querySelector(
+					'[data-section-field="title"]',
+				) as HTMLInputElement;
+				const descEl = sectionEl.querySelector(
+					'[data-section-field="description"]',
+				) as HTMLTextAreaElement;
+				const ftEl = sectionEl.querySelector(
+					'[data-section-field="feature_type"]',
+				) as HTMLSelectElement;
+
+				const platformPicker = sectionEl.querySelector(
+					"platform-picker",
+				) as PlatformPickerEl | null;
+				const platform = platformPicker?.getSelected() ?? null;
+				if (!platform) {
+					throw new Error(`Section ${i + 1}: select a platform`);
+				}
+
+				const feature_type = ftEl.value as "slides" | "frames";
+
+				const featureEls = Array.from(
+					sectionEl.querySelectorAll<HTMLElement>(
+						":scope [data-features-container] > [data-feature]",
+					),
+				);
+
+				const features = featureEls.map((featureEl) => {
+					const ft = featureEl.querySelector(
+						'[data-feature-field="title"]',
+					) as HTMLInputElement;
+					const fdesc = featureEl.querySelector(
+						'[data-feature-field="description"]',
+					) as HTMLTextAreaElement;
+
+					if (feature_type === "frames") {
+						const framesUploader = featureEl.querySelector(
+							"[data-feature-frames] image-uploader",
+						) as ImageUploaderEl | null;
+						const entries = framesUploader?.getEntries() ?? [];
+						const frames = entries
+							.map((e) => e.file ?? e.url ?? null)
+							.filter((x): x is File | string => x != null);
+						return {
+							title: ft.value.trim() || null,
+							description: fdesc.value.trim() || null,
+							image: null,
+							frames: frames.length ? frames : null,
+						};
+					}
+
+					const imageUploader = featureEl.querySelector(
+						"[data-feature-image] image-uploader",
+					) as ImageUploaderEl | null;
+					const entries = imageUploader?.getEntries() ?? [];
+					const e = entries[0];
+					const image = e?.file ?? e?.url ?? null;
+					return {
+						title: null,
+						description: null,
+						image,
+						frames: null,
+					};
+				});
+
+				const id = sectionEl.dataset.sectionId;
+				return {
+					...(id ? { id } : {}),
+					title: titleEl.value.trim(),
+					description: descEl.value.trim(),
+					platform,
+					feature_type,
+					features,
+				};
+			});
+		}
+
+		clear(): void {
+			this._container.innerHTML = "";
+		}
+
+		loadSections(sections: AppSection[]): Promise<void> {
+			this.clear();
+			const imageLoads: Promise<void>[] = [];
+			for (const section of sections) {
+				const sectionEl = this.addSection();
+				sectionEl.dataset.sectionId = section.id;
+				const titleEl = sectionEl.querySelector(
+					'[data-section-field="title"]',
+				) as HTMLInputElement;
+				const descEl = sectionEl.querySelector(
+					'[data-section-field="description"]',
+				) as HTMLTextAreaElement;
+				const ftEl = sectionEl.querySelector(
+					'[data-section-field="feature_type"]',
+				) as HTMLSelectElement;
+
+				titleEl.value = section.title ?? "";
+				descEl.value = section.description ?? "";
+				ftEl.value = section.feature_type ?? "slides";
+
+				const platformPicker = sectionEl.querySelector("platform-picker") as PlatformPickerEl | null;
+				let selected_platform = platforms.find((p) => p.name == section.platform)
+				if (selected_platform) platformPicker?.setSelected(selected_platform);
+
+				this.updateFeatureTypeVisibility(sectionEl);
+
+				for (const feature of section.features ?? []) {
+					const featureEl = this.addFeature(sectionEl);
+					const ft = featureEl.querySelector(
+						'[data-feature-field="title"]',
+					) as HTMLInputElement;
+					const fdesc = featureEl.querySelector(
+						'[data-feature-field="description"]',
+					) as HTMLTextAreaElement;
+					ft.value = feature.title ?? "";
+					fdesc.value = feature.description ?? "";
+
+					if (section.feature_type === "frames" && feature.frames?.length) {
+						const framesUploader = featureEl.querySelector(
+							"[data-feature-frames] image-uploader",
+						) as ImageUploaderEl | null;
+						if (framesUploader) imageLoads.push(framesUploader.loadExisting(feature.frames));
+					} else if (section.feature_type !== "frames" && feature.image) {
+						const imageUploader = featureEl.querySelector(
+							"[data-feature-image] image-uploader",
+						) as ImageUploaderEl | null;
+						if (imageUploader) imageLoads.push(imageUploader.loadExisting([feature.image]));
+					}
+				}
+			}
+			return Promise.all(imageLoads).then(() => undefined);
+		}
+
+		private addSection(): HTMLElement {
+			const node = this._sectionTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
+			this._container.appendChild(node);
+
+			node.querySelector(
+				'[data-section-field="feature_type"]',
+			)?.addEventListener("change", () =>
+				this.updateFeatureTypeVisibility(node),
+			);
+
+			node.querySelector("[data-add-feature]")?.addEventListener(
+				"click",
+				() => this.addFeature(node),
+			);
+
+			node.querySelector("[data-remove-section]")?.addEventListener(
+				"click",
+				() => {
+					node.remove();
+					this.renderTitles();
+				},
+			);
+
+			const toggleBtn = node.querySelector(
+				"[data-section-toggle]",
+			) as HTMLButtonElement | null;
+			const body = node.querySelector(
+				"[data-section-body]",
+			) as HTMLElement | null;
+			const chevron = node.querySelector(
+				"[data-section-chevron]",
+			) as HTMLElement | null;
+			toggleBtn?.addEventListener("click", () => {
+				if (!body) return;
+				const collapsed = body.classList.toggle("hidden");
+				chevron?.classList.toggle("-rotate-90", collapsed);
+			});
+
+			this.renderTitles();
+			return node;
+		}
+
+		private addFeature(sectionEl: HTMLElement): HTMLElement {
+			const node = this._featureTemplate.content.firstElementChild!.cloneNode(
+				true,
+			) as HTMLElement;
+			sectionEl
+				.querySelector("[data-features-container]")!
+				.appendChild(node);
+
+			this.updateFeatureTypeVisibility(sectionEl);
+
+			node.querySelector("[data-remove-feature]")?.addEventListener(
+				"click",
+				() => {
+					node.remove();
+					this.renderTitles();
+				},
+			);
+
+			this.renderTitles();
+			return node;
+		}
+
+		private updateFeatureTypeVisibility(sectionEl: HTMLElement) {
+			const select = sectionEl.querySelector(
+				'[data-section-field="feature_type"]',
+			) as HTMLSelectElement;
+			const isFrames = select.value === "frames";
+			sectionEl
+				.querySelectorAll<HTMLElement>("[data-feature]")
+				.forEach((featureEl) => {
+					const textWrap = featureEl.querySelector(
+						"[data-feature-text]",
+					) as HTMLElement;
+					const imgWrap = featureEl.querySelector(
+						"[data-feature-image]",
+					) as HTMLElement;
+					const framesWrap = featureEl.querySelector(
+						"[data-feature-frames]",
+					) as HTMLElement;
+					textWrap.classList.toggle("hidden", !isFrames);
+					imgWrap.classList.toggle("hidden", isFrames);
+					framesWrap.classList.toggle("hidden", !isFrames);
+				});
+		}
+
+		private renderTitles() {
+			const sectionEls = Array.from(
+				this._container.querySelectorAll<HTMLElement>(":scope > [data-section]"),
+			);
+			sectionEls.forEach((sectionEl, i) => {
+				const titleEl = sectionEl.querySelector(
+					"[data-section-title]",
+				) as HTMLElement;
+				titleEl.textContent = `Section ${i + 1}`;
+				const featureEls = Array.from(
+					sectionEl.querySelectorAll<HTMLElement>(
+						":scope [data-features-container] > [data-feature]",
+					),
+				);
+				featureEls.forEach((featureEl, j) => {
+					const ft = featureEl.querySelector(
+						"[data-feature-title]",
+					) as HTMLElement;
+					ft.textContent = `Feature ${j + 1}`;
+				});
+			});
+		}
+	}
+
+	if (!customElements.get("sections-list")) {
+		customElements.define("sections-list", SectionsList);
+	}
+</script>

@@ -1,0 +1,182 @@
+<div id="project-list" class="mt-8 flex flex-col gap-4">
+    <div class="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/40 p-10 text-center">
+        <i class="fa-solid fa-folder-open mb-3 text-3xl text-neutral-600"></i>
+        <p class="text-sm text-neutral-400">
+            No projects yet. Click "Add Project" to create one.
+        </p>
+    </div>
+</div>
+
+<script>
+    import {
+        projects,
+        sections,
+        showAddSectionModal,
+        showEditPolicyModal,
+        showEditProjectModal,
+        showEditSectionModal,
+    } from "@/states";
+    import type { App, AppSection } from "@model/app";
+    import { platforms } from "@model/platforms";
+
+    const list = document.getElementById("project-list") as HTMLElement;
+
+    function escapeHtml(value: string): string {
+        return value
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function platformIcon(name: string): string {
+        return platforms.find((p) => p.name === name)?.icon
+            ?? "fa-duotone fa-light fa-cube";
+    }
+
+    function renderSectionButtons(appSections: AppSection[]): string {
+        if (appSections.length === 0) {
+            return `
+                <div class="col-span-full grid place-items-center rounded-md border border-dashed border-neutral-800 bg-neutral-950/40 px-3 py-4 text-xs text-neutral-500">
+                    No sections yet.
+                </div>
+            `;
+        }
+        return appSections
+            .map((section) => {
+                const icon = platformIcon(section.platform);
+                const label = section.title?.trim() || section.platform;
+                return `
+                    <button
+                        type="button"
+                        data-section-id="${section.id}"
+                        class="flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-left text-xs text-neutral-300 transition hover:border-indigo-500/40 hover:bg-neutral-900 hover:text-neutral-100"
+                        title="Edit ${escapeHtml(label)}"
+                    >
+                        <i class="${icon} text-neutral-400"></i>
+                        <span class="truncate flex-1">${escapeHtml(label)}</span>
+                        <span class="text-[10px] text-neutral-500 capitalize">${escapeHtml(section.platform)}</span>
+                    </button>
+                `;
+            })
+            .join("");
+    }
+
+    function renderProject(project: App, appSections: AppSection[]): string {
+        const image = project.image
+            ? `<img src="${project.image}" alt="${escapeHtml(project.name)}" class="h-full w-full object-cover" loading="lazy"/>`
+            : `<div class="grid h-full place-items-center text-neutral-700"><i class="fa-solid fa-image"></i></div>`;
+
+        return `
+            <div class="flex flex-col gap-3 md:flex-row md:items-stretch">
+                <div class="flex min-w-0 flex-1 flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 md:flex-row md:items-center">
+                    <div class="flex min-w-0 items-center gap-3 md:w-72 md:shrink-0">
+                        <div class="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950">
+                            ${image}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <h3 class="truncate text-base font-semibold text-neutral-100">${escapeHtml(project.name)}</h3>
+                            <p class="line-clamp-2 text-xs text-neutral-400">${escapeHtml(project.description ?? "")}</p>
+                            <div class="mt-1 flex items-center gap-2 text-[11px] text-neutral-500">
+                                <span class="font-mono">/${escapeHtml(project.page)}</span>
+                                ${project.apple_link ? `<i class="fa-brands fa-apple" title="Apple"></i>` : ""}
+                                ${project.web_link ? `<i class="fa-solid fa-globe" title="Web"></i>` : ""}
+                                ${project.github_link ? `<i class="fa-brands fa-github" title="GitHub"></i>` : ""}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        ${renderSectionButtons(appSections)}
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2 md:w-52 md:shrink-0">
+                    <button
+                        type="button"
+                        data-edit-project-id="${project.id}"
+                        class="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-xs font-medium text-neutral-200 transition hover:border-indigo-500/40 hover:bg-neutral-900 hover:text-neutral-100"
+                    >
+                        <i class="fa-solid fa-pen-to-square"></i>
+                        Edit basic info
+                    </button>
+                    <button
+                        type="button"
+                        data-add-section-id="${project.id}"
+                        class="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                    >
+                        <i class="fa-solid fa-plus"></i>
+                        Add section
+                    </button>
+                    <button
+                        type="button"
+                        data-policy-id="${project.id}"
+                        class="inline-flex items-center justify-center gap-2 rounded-md border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-medium text-indigo-300 transition hover:border-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-200"
+                    >
+                        <i class="fa-solid fa-file-shield"></i>
+                        Modify policy
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    function render() {
+        const allProjects = projects.get();
+        const allSections = sections.get();
+
+        if (allProjects.length === 0) {
+            list.innerHTML = `
+                <div class="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/40 p-10 text-center">
+                    <i class="fa-solid fa-folder-open mb-3 text-3xl text-neutral-600"></i>
+                    <p class="text-sm text-neutral-400">
+                        No projects yet. Click "Add Project" to create one.
+                    </p>
+                </div>
+            `;
+            return;
+        }
+
+        list.innerHTML = allProjects
+            .map((project) => {
+                const appSections = allSections.filter((s) => s.app?.id === project.id);
+                return renderProject(project, appSections);
+            })
+            .join("");
+
+        list.querySelectorAll<HTMLElement>("[data-edit-project-id]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const id = el.getAttribute("data-edit-project-id");
+                if (id) showEditProjectModal.set(id);
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>("[data-add-section-id]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const id = el.getAttribute("data-add-section-id");
+                if (id) showAddSectionModal.set(id);
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>("[data-policy-id]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const id = el.getAttribute("data-policy-id");
+                if (id) showEditPolicyModal.set(id);
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>("[data-section-id]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const sectionId = el.getAttribute("data-section-id");
+                if (!sectionId) return;
+                const section = sections.get().find((s) => s.id === sectionId);
+                if (!section) return;
+                showEditSectionModal.set({ appId: section.app.id, sectionId });
+            });
+        });
+    }
+
+    projects.listen(() => render());
+    sections.listen(() => render());
+</script>

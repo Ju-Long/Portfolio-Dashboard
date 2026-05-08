@@ -1,0 +1,521 @@
+---
+import ModalHeader from "./components/ModalHeader.astro";
+import ImageUploader from "./components/ImageUploader.astro";
+import PlatformPicker from "./components/PlatformPicker.astro";
+---
+
+<dialog id="edit-section-modal" class="modal-dialog max-w-3xl">
+	<form id="edit-section-form" class="flex max-h-[85vh] flex-col">
+		<ModalHeader title="Section"/>
+
+		<div class="modal-body space-y-4">
+			<div data-loading-indicator class="hidden text-xs text-neutral-400">
+				<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>
+				Loading…
+			</div>
+
+			<div class="grid grid-cols-2 gap-3">
+				<label class="block">
+					<span class="field-label-sm">Title</span>
+					<input data-section-field="title" type="text" class="field-input-md" required/>
+				</label>
+				<label class="block">
+					<span class="field-label-sm">Feature type</span>
+					<select data-section-field="feature_type" class="field-select-md">
+						<option value="slides">slides</option>
+						<option value="frames">frames</option>
+					</select>
+				</label>
+			</div>
+
+			<label class="block">
+				<span class="field-label-sm">Description</span>
+				<textarea data-section-field="description" rows="2" class="field-input-md resize-y"></textarea>
+			</label>
+
+			<PlatformPicker />
+
+			<div>
+				<div class="mb-1.5 flex items-center justify-between">
+					<span class="text-xs text-neutral-400">Features</span>
+					<button type="button" data-add-feature class="inline-flex items-center gap-1 rounded border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[11px] text-neutral-300 transition hover:border-neutral-700 hover:text-neutral-100">
+						<i class="fa-solid fa-plus text-[9px]"></i>
+						Add Feature
+					</button>
+				</div>
+				<div data-features-container class="space-y-2"></div>
+			</div>
+		</div>
+
+		<footer class="modal-footer justify-between">
+			<button type="button" id="section-delete-btn" class="btn-danger hidden">
+				<i class="fa-solid fa-trash"></i>
+				Delete
+			</button>
+			<div class="flex flex-1 items-center justify-end gap-2">
+				<button type="button" data-close class="btn-secondary">
+					Cancel
+				</button>
+				<button type="submit" id="section-submit-btn" class="btn-primary">
+					<i class="fa-solid fa-floppy-disk"></i>
+					<span data-section-submit-label>Save</span>
+				</button>
+			</div>
+		</footer>
+	</form>
+
+	<template data-feature-template>
+		<div data-feature class="rounded-lg border border-neutral-800 bg-neutral-950/60 p-3">
+			<div class="mb-2 flex items-center justify-between">
+				<span class="text-xs text-neutral-400" data-feature-title>Feature</span>
+				<button type="button" data-remove-feature class="rounded p-1 text-neutral-500 transition hover:bg-neutral-800 hover:text-rose-400" aria-label="Remove feature">
+					<i class="fa-solid fa-xmark text-[10px]"></i>
+				</button>
+			</div>
+			<div class="space-y-2">
+				<div data-feature-text class="space-y-2">
+					<input data-feature-field="title" type="text" placeholder="Title" class="field-input-sm"/>
+					<textarea data-feature-field="description" rows="2" placeholder="Description" class="field-input-sm resize-y"></textarea>
+				</div>
+				<div data-feature-image>
+					<span class="field-label-xs">Image</span>
+					<ImageUploader name="feature-image" label='Drop image or <span class="filepond--label-action">browse</span>'/>
+				</div>
+				<div data-feature-frames class="hidden">
+					<span class="field-label-xs">Frames</span>
+					<div data-feature-frames-info class="hidden rounded border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-neutral-300">
+						<i class="fa-solid fa-images mr-1.5 text-neutral-500"></i>
+						<span data-feature-frames-count>0 frames stored</span>
+					</div>
+					<div data-feature-frames-uploader>
+						<ImageUploader name="feature-frames" multiple preview={false} label='Drop frames or <span class="filepond--label-action">browse</span>'/>
+					</div>
+				</div>
+			</div>
+		</div>
+	</template>
+</dialog>
+
+<dialog
+	id="delete-section-confirm"
+	class="m-auto w-full max-w-md rounded-2xl border border-rose-500/30 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm"
+>
+	<div class="flex flex-col">
+		<header class="flex items-center gap-3 border-b border-neutral-800 px-6 py-4">
+			<div class="grid h-10 w-10 place-items-center rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-300">
+				<i class="fa-solid fa-triangle-exclamation"></i>
+			</div>
+			<div>
+				<h2 class="text-base font-semibold text-rose-200">Delete section?</h2>
+				<p class="text-xs text-neutral-400">This action cannot be undone.</p>
+			</div>
+		</header>
+
+		<div class="space-y-3 px-6 py-5 text-sm text-neutral-300">
+			<p>
+				You are about to permanently delete
+				<strong data-section-confirm-name class="text-neutral-100">this section</strong>.
+			</p>
+		</div>
+
+		<footer class="modal-footer justify-end">
+			<button type="button" data-section-confirm-cancel class="btn-secondary">
+				Cancel
+			</button>
+			<button type="button" data-section-confirm-delete class="btn-danger">
+				<i class="fa-solid fa-trash"></i>
+				<span data-section-confirm-delete-label>Delete section</span>
+			</button>
+		</footer>
+	</div>
+</dialog>
+
+<script>
+	import type { AppSection, Platform } from "@model/app";
+	import { platforms } from "@model/platforms";
+	import {
+		addAppSection,
+		updateAppSection,
+		deleteAppSection,
+	} from "@firebase/sync";
+	import {
+		sections,
+		showAddSectionModal,
+		showEditSectionModal,
+	} from "@/states";
+
+	type ImageUploaderEl = HTMLElement & {
+		getFile(): File | null;
+		getFiles(): File[];
+		getEntries(): Array<{ file?: File; url?: string }>;
+		loadExisting(urls: string[]): Promise<void>;
+		clear(): void;
+	};
+	type PlatformPickerEl = HTMLElement & {
+		getSelected(): Platform | null;
+		setSelected(platform: Platform): void;
+	};
+
+	const dialog = document.getElementById("edit-section-modal") as HTMLDialogElement;
+	const form = document.getElementById("edit-section-form") as HTMLFormElement;
+	const submitBtn = document.getElementById("section-submit-btn") as HTMLButtonElement;
+	const submitLabel = submitBtn.querySelector("[data-section-submit-label]") as HTMLSpanElement;
+	const deleteBtn = document.getElementById("section-delete-btn") as HTMLButtonElement;
+	const loadingIndicator = dialog.querySelector("[data-loading-indicator]") as HTMLElement;
+
+	const titleInput = dialog.querySelector('[data-section-field="title"]') as HTMLInputElement;
+	const descInput = dialog.querySelector('[data-section-field="description"]') as HTMLTextAreaElement;
+	const ftSelect = dialog.querySelector('[data-section-field="feature_type"]') as HTMLSelectElement;
+	const platformPicker = dialog.querySelector("platform-picker") as PlatformPickerEl;
+
+	const featuresContainer = dialog.querySelector("[data-features-container]") as HTMLDivElement;
+	const featureTemplate = dialog.querySelector("[data-feature-template]") as HTMLTemplateElement;
+	const addFeatureBtn = dialog.querySelector("[data-add-feature]") as HTMLButtonElement;
+
+	let mode: "add" | "edit" = "add";
+	let currentAppId: string | null = null;
+	let currentSectionId: string | null = null;
+	let loadingImages = false;
+
+	function clearFeatures() {
+		featuresContainer.innerHTML = "";
+	}
+
+	function renderFeatureTitles() {
+		const featureEls = Array.from(
+			featuresContainer.querySelectorAll<HTMLElement>(":scope > [data-feature]"),
+		);
+		featureEls.forEach((featureEl, j) => {
+			const ft = featureEl.querySelector("[data-feature-title]") as HTMLElement;
+			ft.textContent = `Feature ${j + 1}`;
+		});
+	}
+
+	function updateFeatureTypeVisibility() {
+		const isFrames = ftSelect.value === "frames";
+		featuresContainer
+			.querySelectorAll<HTMLElement>("[data-feature]")
+			.forEach((featureEl) => {
+				const textWrap = featureEl.querySelector("[data-feature-text]") as HTMLElement;
+				const imgWrap = featureEl.querySelector("[data-feature-image]") as HTMLElement;
+				const framesWrap = featureEl.querySelector("[data-feature-frames]") as HTMLElement;
+				textWrap.classList.toggle("hidden", !isFrames);
+				imgWrap.classList.toggle("hidden", isFrames);
+				framesWrap.classList.toggle("hidden", !isFrames);
+
+				const framesInfo = featureEl.querySelector("[data-feature-frames-info]") as HTMLElement;
+				const framesUploader = featureEl.querySelector("[data-feature-frames-uploader]") as HTMLElement;
+				const hasExisting = featureEl.dataset.existingFrames != null;
+				framesInfo.classList.toggle("hidden", !hasExisting);
+				framesUploader.classList.toggle("hidden", hasExisting);
+			});
+	}
+
+	function addFeature(): HTMLElement {
+		const node = featureTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
+		featuresContainer.appendChild(node);
+
+		updateFeatureTypeVisibility();
+
+		node.querySelector("[data-remove-feature]")?.addEventListener("click", () => {
+			node.remove();
+			renderFeatureTitles();
+		});
+
+		renderFeatureTitles();
+		return node;
+	}
+
+	addFeatureBtn.addEventListener("click", () => addFeature());
+	ftSelect.addEventListener("change", () => updateFeatureTypeVisibility());
+
+	function resetForm() {
+		titleInput.value = "";
+		descInput.value = "";
+		ftSelect.value = "slides";
+		const labelEl = platformPicker.querySelector("[data-platform-label]") as HTMLSpanElement;
+		if (labelEl) {
+			labelEl.innerHTML = `<span class="text-neutral-500">Select platform…</span>`;
+		}
+		(platformPicker as any)._selected = null;
+		clearFeatures();
+		submitBtn.disabled = false;
+		deleteBtn.disabled = false;
+		submitLabel.textContent = "Save";
+	}
+
+	async function populate(section: AppSection): Promise<void> {
+		titleInput.value = section.title ?? "";
+		descInput.value = section.description ?? "";
+		ftSelect.value = section.feature_type ?? "slides";
+
+		const selectedPlatform = platforms.find((p) => p.name === section.platform);
+		if (selectedPlatform) platformPicker.setSelected(selectedPlatform);
+
+		clearFeatures();
+
+		const imageLoads: Promise<void>[] = [];
+		for (const feature of section.features ?? []) {
+			const featureEl = addFeature();
+			const ft = featureEl.querySelector('[data-feature-field="title"]') as HTMLInputElement;
+			const fdesc = featureEl.querySelector('[data-feature-field="description"]') as HTMLTextAreaElement;
+			ft.value = feature.title ?? "";
+			fdesc.value = feature.description ?? "";
+
+			if (section.feature_type === "frames" && feature.frames?.length) {
+				featureEl.dataset.existingFrames = JSON.stringify(feature.frames);
+				const framesCount = featureEl.querySelector("[data-feature-frames-count]") as HTMLElement;
+				const count = feature.frames.length;
+				framesCount.textContent = `${count} frame${count === 1 ? "" : "s"} stored`;
+			} else if (section.feature_type !== "frames" && feature.image) {
+				const imageUploader = featureEl.querySelector(
+					"[data-feature-image] image-uploader",
+				) as ImageUploaderEl | null;
+				if (imageUploader) imageLoads.push(imageUploader.loadExisting([feature.image]));
+			}
+		}
+
+		updateFeatureTypeVisibility();
+
+		await Promise.all(imageLoads);
+	}
+
+	function openAdd(appId: string) {
+		mode = "add";
+		currentAppId = appId;
+		currentSectionId = null;
+		resetForm();
+		deleteBtn.classList.add("hidden");
+		loadingIndicator.classList.add("hidden");
+		if (!dialog.open) dialog.showModal();
+	}
+
+	function openEdit(appId: string, sectionId: string) {
+		const section = sections.get().find((s) => s.id === sectionId);
+		if (!section) {
+			showEditSectionModal.set(null);
+			return;
+		}
+		mode = "edit";
+		currentAppId = appId;
+		currentSectionId = sectionId;
+		resetForm();
+		deleteBtn.classList.remove("hidden");
+
+		loadingImages = true;
+		loadingIndicator.classList.remove("hidden");
+		if (!dialog.open) dialog.showModal();
+
+		populate(section).finally(() => {
+			loadingImages = false;
+			loadingIndicator.classList.add("hidden");
+		});
+	}
+
+	function close() {
+		dialog.close();
+		showAddSectionModal.set(null);
+		showEditSectionModal.set(null);
+		currentAppId = null;
+		currentSectionId = null;
+	}
+
+	showAddSectionModal.listen((appId) => {
+		if (appId) openAdd(appId);
+	});
+	showEditSectionModal.listen((data) => {
+		if (data) openEdit(data.appId, data.sectionId);
+	});
+
+	dialog.addEventListener("close", () => {
+		showAddSectionModal.set(null);
+		showEditSectionModal.set(null);
+		currentAppId = null;
+		currentSectionId = null;
+	});
+
+	dialog.querySelectorAll("[data-close]").forEach((el) => {
+		el.addEventListener("click", () => close());
+	});
+
+	function collectFeaturesForUpload() {
+		const feature_type = ftSelect.value as "slides" | "frames";
+		const featureEls = Array.from(
+			featuresContainer.querySelectorAll<HTMLElement>(":scope > [data-feature]"),
+		);
+		return featureEls.map((featureEl) => {
+			const ft = featureEl.querySelector('[data-feature-field="title"]') as HTMLInputElement;
+			const fdesc = featureEl.querySelector('[data-feature-field="description"]') as HTMLTextAreaElement;
+
+			if (feature_type === "frames") {
+				const framesUploader = featureEl.querySelector(
+					"[data-feature-frames] image-uploader",
+				) as ImageUploaderEl | null;
+				const files = framesUploader?.getFiles() ?? [];
+				return {
+					title: ft.value.trim() || null,
+					description: fdesc.value.trim() || null,
+					image: null,
+					frames: files.length ? files : null,
+				};
+			}
+
+			const imageUploader = featureEl.querySelector(
+				"[data-feature-image] image-uploader",
+			) as ImageUploaderEl | null;
+			const file = imageUploader?.getFile() ?? null;
+			return {
+				title: null,
+				description: null,
+				image: file,
+				frames: null,
+			};
+		});
+	}
+
+	function collectFeaturesForEdit() {
+		const feature_type = ftSelect.value as "slides" | "frames";
+		const featureEls = Array.from(
+			featuresContainer.querySelectorAll<HTMLElement>(":scope > [data-feature]"),
+		);
+		return featureEls.map((featureEl) => {
+			const ft = featureEl.querySelector('[data-feature-field="title"]') as HTMLInputElement;
+			const fdesc = featureEl.querySelector('[data-feature-field="description"]') as HTMLTextAreaElement;
+
+			if (feature_type === "frames") {
+				const existingFramesJson = featureEl.dataset.existingFrames;
+				let frames: (File | string)[] = [];
+				if (existingFramesJson) {
+					try {
+						frames = JSON.parse(existingFramesJson) as string[];
+					} catch {
+						frames = [];
+					}
+				} else {
+					const framesUploader = featureEl.querySelector(
+						"[data-feature-frames] image-uploader",
+					) as ImageUploaderEl | null;
+					frames = framesUploader?.getFiles() ?? [];
+				}
+				return {
+					title: ft.value.trim() || null,
+					description: fdesc.value.trim() || null,
+					image: null as File | string | null,
+					frames: frames.length ? frames : null,
+				};
+			}
+
+			const imageUploader = featureEl.querySelector(
+				"[data-feature-image] image-uploader",
+			) as ImageUploaderEl | null;
+			const entries = imageUploader?.getEntries() ?? [];
+			const e = entries[0];
+			const image = e?.file ?? e?.url ?? null;
+			return {
+				title: null,
+				description: null,
+				image,
+				frames: null as (File | string)[] | null,
+			};
+		});
+	}
+
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		if (!currentAppId) return;
+		if (loadingImages) {
+			alert("Still loading existing images. Please wait.");
+			return;
+		}
+
+		const platform = platformPicker.getSelected();
+		if (!platform) {
+			alert("Select a platform");
+			return;
+		}
+
+		const title = titleInput.value.trim();
+		const description = descInput.value.trim();
+		const feature_type = ftSelect.value as "slides" | "frames";
+
+		submitBtn.disabled = true;
+		deleteBtn.disabled = true;
+		submitLabel.textContent = "Saving…";
+
+		try {
+			if (mode === "add") {
+				const features = collectFeaturesForUpload();
+				const created = await addAppSection(
+					currentAppId,
+					title,
+					description,
+					platform.name,
+					feature_type,
+					features,
+				);
+				sections.set([...sections.get(), created]);
+			} else if (mode === "edit" && currentSectionId) {
+				const features = collectFeaturesForEdit();
+				const updated = await updateAppSection(
+					currentSectionId,
+					currentAppId,
+					title,
+					description,
+					platform.name,
+					feature_type,
+					features,
+				);
+				sections.set(
+					sections.get().map((s) => (s.id === updated.id ? updated : s)),
+				);
+			}
+			close();
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+			submitBtn.disabled = false;
+			deleteBtn.disabled = false;
+			submitLabel.textContent = "Save";
+		}
+	});
+
+	const confirmDialog = document.getElementById("delete-section-confirm") as HTMLDialogElement;
+	const confirmName = confirmDialog.querySelector("[data-section-confirm-name]") as HTMLElement;
+	const confirmCancelBtn = confirmDialog.querySelector("[data-section-confirm-cancel]") as HTMLButtonElement;
+	const confirmDeleteBtn = confirmDialog.querySelector("[data-section-confirm-delete]") as HTMLButtonElement;
+	const confirmDeleteLabel = confirmDialog.querySelector("[data-section-confirm-delete-label]") as HTMLSpanElement;
+
+	deleteBtn.addEventListener("click", () => {
+		if (mode !== "edit" || !currentSectionId) return;
+		confirmName.textContent = titleInput.value.trim() || "this section";
+		confirmDeleteBtn.disabled = false;
+		confirmCancelBtn.disabled = false;
+		confirmDeleteLabel.textContent = "Delete section";
+		confirmDialog.showModal();
+	});
+
+	confirmCancelBtn.addEventListener("click", () => confirmDialog.close());
+
+	confirmDeleteBtn.addEventListener("click", async () => {
+		if (!currentSectionId) return;
+		confirmDeleteBtn.disabled = true;
+		confirmCancelBtn.disabled = true;
+		confirmDeleteLabel.textContent = "Deleting…";
+		deleteBtn.disabled = true;
+
+		const id = currentSectionId;
+		try {
+			await deleteAppSection(id);
+			sections.set(sections.get().filter((s) => s.id !== id));
+			confirmDialog.close();
+			close();
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+			confirmDeleteBtn.disabled = false;
+			confirmCancelBtn.disabled = false;
+			confirmDeleteLabel.textContent = "Delete section";
+			deleteBtn.disabled = false;
+		}
+	});
+</script>

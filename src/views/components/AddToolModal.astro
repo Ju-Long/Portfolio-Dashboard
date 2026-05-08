@@ -1,0 +1,121 @@
+---
+import ModalHeader from "./ModalHeader.astro";
+import ImageUploader from "./ImageUploader.astro";
+---
+
+<dialog id="add-tool-modal" class="modal-dialog max-w-md">
+	<form id="add-tool-form" class="flex max-h-[85vh] flex-col">
+		<ModalHeader title="Add Tool"/>
+
+		<div class="modal-body space-y-4">
+			<div>
+				<span class="modal-legend mb-1 block">
+					Icon
+				</span>
+				<ImageUploader name="add-tool-icon" label='Drop icon or <span class="filepond--label-action">browse</span>'/>
+			</div>
+
+			<label class="block">
+				<span class="field-label">Name</span>
+				<input name="tool_name" type="text" required class="field-input" autocomplete="off"/>
+			</label>
+
+			<label class="block">
+				<span class="field-label">Link</span>
+				<input name="tool_link" type="url" required placeholder="https://..." class="field-input" autocomplete="url"/>
+			</label>
+
+			<p data-add-tool-error class="hidden text-xs text-rose-400"></p>
+		</div>
+
+		<footer class="modal-footer justify-end">
+			<button type="button" data-close class="btn-secondary">
+				Cancel
+			</button>
+			<button type="submit" id="add-tool-submit-btn" class="btn-primary">
+				<i class="fa-solid fa-plus"></i>
+				<span data-add-tool-submit-label>Add Tool</span>
+			</button>
+		</footer>
+	</form>
+</dialog>
+
+<script>
+	import { addTools } from "@firebase/sync";
+	import { tools as toolsStore } from "@/states";
+
+	type ImageUploaderEl = HTMLElement & {
+		getFile(): File | null;
+		clear(): void;
+	};
+
+	const dialog = document.getElementById("add-tool-modal") as HTMLDialogElement;
+	const form = document.getElementById("add-tool-form") as HTMLFormElement;
+	const submitBtn = document.getElementById("add-tool-submit-btn") as HTMLButtonElement;
+	const submitLabel = submitBtn.querySelector(
+		"[data-add-tool-submit-label]",
+	) as HTMLSpanElement;
+	const errorEl = dialog.querySelector(
+		"[data-add-tool-error]",
+	) as HTMLParagraphElement;
+	const iconUploader = dialog.querySelector(
+		'image-uploader[data-name="add-tool-icon"]',
+	) as ImageUploaderEl;
+
+	const nameInput = form.elements.namedItem("tool_name") as HTMLInputElement;
+	const linkInput = form.elements.namedItem("tool_link") as HTMLInputElement;
+
+	function showError(msg: string) {
+		errorEl.textContent = msg;
+		errorEl.classList.remove("hidden");
+	}
+	function clearError() {
+		errorEl.textContent = "";
+		errorEl.classList.add("hidden");
+	}
+	function reset() {
+		form.reset();
+		iconUploader.clear();
+		clearError();
+		submitBtn.disabled = false;
+		submitLabel.textContent = "Add Tool";
+	}
+
+	document.addEventListener("add-tool-modal:open", () => {
+		reset();
+		dialog.showModal();
+	});
+
+	dialog.querySelectorAll("[data-close]").forEach((el) => {
+		el.addEventListener("click", () => dialog.close());
+	});
+
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		clearError();
+
+		const icon = iconUploader.getFile();
+		const name = nameInput.value.trim();
+		const link = linkInput.value.trim();
+
+		if (!name) { showError("Name is required"); return; }
+		if (!link) { showError("Link is required"); return; }
+
+		submitBtn.disabled = true;
+		submitLabel.textContent = "Adding…";
+
+		try {
+			const newTool = await addTools(name, link, icon);
+			toolsStore.set([...toolsStore.get(), newTool]);
+			document.dispatchEvent(
+				new CustomEvent("tool-added", { detail: newTool }),
+			);
+			dialog.close();
+		} catch (err) {
+			console.error(err);
+			showError((err as Error).message);
+			submitBtn.disabled = false;
+			submitLabel.textContent = "Add Tool";
+		}
+	});
+</script>

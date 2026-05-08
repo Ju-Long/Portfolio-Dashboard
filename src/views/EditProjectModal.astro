@@ -1,0 +1,285 @@
+---
+import ProjectFormFields from "./components/ProjectFormFields.astro";
+import ModalHeader from "./components/ModalHeader.astro";
+---
+
+<dialog id="edit-project-modal" class="modal-dialog max-w-3xl">
+	<form id="edit-project-form" class="flex max-h-[85vh] flex-col">
+		<ModalHeader title="Edit Basic Info"/>
+
+		<div class="modal-body space-y-6">
+			<ProjectFormFields>
+				<span slot="icon-legend-extra" data-loading-indicator class="ml-1 hidden text-[11px] font-normal normal-case text-neutral-400">
+					<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>
+					Loading…
+				</span>
+			</ProjectFormFields>
+		</div>
+
+		<footer class="modal-footer justify-between">
+			<button type="button" id="delete-btn" class="btn-danger">
+				<i class="fa-solid fa-trash"></i>
+				Delete
+			</button>
+			<div class="flex items-center gap-2">
+				<button type="button" data-close class="btn-secondary">
+					Cancel
+				</button>
+				<button type="submit" id="edit-submit-btn" class="btn-primary">
+					<i class="fa-solid fa-floppy-disk"></i>
+					<span data-submit-label>Save Changes</span>
+				</button>
+			</div>
+		</footer>
+	</form>
+</dialog>
+
+<dialog
+	id="delete-project-confirm"
+	class="m-auto w-full max-w-md rounded-2xl border border-rose-500/30 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm"
+>
+	<div class="flex flex-col">
+		<header class="flex items-center gap-3 border-b border-neutral-800 px-6 py-4">
+			<div class="grid h-10 w-10 place-items-center rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-300">
+				<i class="fa-solid fa-triangle-exclamation"></i>
+			</div>
+			<div>
+				<h2 class="text-base font-semibold text-rose-200">Delete project?</h2>
+				<p class="text-xs text-neutral-400">This action cannot be undone.</p>
+			</div>
+		</header>
+
+		<div class="space-y-3 px-6 py-5 text-sm text-neutral-300">
+			<p>
+				You are about to permanently delete
+				<strong data-confirm-name class="text-neutral-100">this project</strong>.
+			</p>
+			<ul class="list-disc space-y-1 pl-5 text-neutral-400">
+				<li>All sections and uploaded files will be removed.</li>
+				<li>Privacy policy and terms of use will be removed.</li>
+			</ul>
+		</div>
+
+		<footer class="modal-footer justify-end">
+			<button type="button" data-confirm-cancel class="btn-secondary">
+				Cancel
+			</button>
+			<button type="button" data-confirm-delete class="btn-danger">
+				<i class="fa-solid fa-trash"></i>
+				<span data-confirm-delete-label>Delete project</span>
+			</button>
+		</footer>
+	</div>
+</dialog>
+
+<script>
+	import type { App, AppTool } from "@model/app";
+	import { firestore } from "@firebase/client";
+	import { doc } from "firebase/firestore";
+	import { deleteApp, updateAppBasicInfo } from "@firebase/sync";
+	import { projects, sections, showEditProjectModal } from "@/states";
+
+	type ToolsPickerEl = HTMLElement & {
+		getSelected(): AppTool[];
+		setSelected(tools: AppTool[]): void;
+		clear(): void;
+	};
+	type ImageUploaderEl = HTMLElement & {
+		getEntries(): Array<{ file?: File; url?: string }>;
+		loadExisting(urls: string[]): Promise<void>;
+		clear(): void;
+	};
+
+	const dialog = document.getElementById("edit-project-modal") as HTMLDialogElement;
+	const form = document.getElementById("edit-project-form") as HTMLFormElement;
+	const submitBtn = document.getElementById("edit-submit-btn") as HTMLButtonElement;
+	const deleteBtn = document.getElementById("delete-btn") as HTMLButtonElement;
+	const submitLabel = submitBtn.querySelector("[data-submit-label]") as HTMLSpanElement;
+	const loadingIndicator = dialog.querySelector("[data-loading-indicator]") as HTMLSpanElement;
+
+	const coverUploader = dialog.querySelector(
+		'image-uploader[data-name="main-image"]',
+	) as ImageUploaderEl;
+	const toolsPicker = dialog.querySelector("tools-picker") as ToolsPickerEl;
+
+	let currentId: string | null = null;
+	let loadingImages = false;
+
+	const setVal = (name: string, value: string) => {
+		const el = form.elements.namedItem(name) as
+			| HTMLInputElement
+			| HTMLTextAreaElement
+			| null;
+		if (el) el.value = value ?? "";
+	};
+	const getVal = (name: string): string =>
+		(
+			(form.elements.namedItem(name) as HTMLInputElement | null)?.value ?? ""
+		).trim();
+
+	function findProject(id: string): App | null {
+		return projects.get().find((p) => p.id === id) ?? null;
+	}
+
+	async function populate(project: App): Promise<void> {
+		setVal("name", project.name ?? "");
+		setVal("page", project.page ?? "");
+		setVal("description", project.description ?? "");
+		setVal("apple_link", project.apple_link ?? "");
+		setVal("web_link", project.web_link ?? "");
+		setVal("github_link", project.github_link ?? "");
+
+		coverUploader.clear();
+
+		const refs = (project.tools ?? []).map((t) => ({
+			id: typeof t === "string" ? t : t.id,
+			name: "",
+			link: "",
+			icon: null,
+		})) as AppTool[];
+		toolsPicker.setSelected(refs);
+
+		if (project.image) {
+			await coverUploader.loadExisting([project.image]);
+		}
+	}
+
+	function open(id: string) {
+		const project = findProject(id);
+		if (!project) {
+			showEditProjectModal.set(null);
+			return;
+		}
+		currentId = project.id;
+		submitBtn.disabled = false;
+		deleteBtn.disabled = false;
+		submitLabel.textContent = "Save Changes";
+
+		loadingImages = true;
+		loadingIndicator.classList.remove("hidden");
+		if (!dialog.open) dialog.showModal();
+
+		populate(project).finally(() => {
+			loadingImages = false;
+			loadingIndicator.classList.add("hidden");
+		});
+	}
+
+	function close() {
+		dialog.close();
+		showEditProjectModal.set(null);
+		currentId = null;
+	}
+
+	showEditProjectModal.listen((id) => {
+		if (id) open(id);
+	});
+
+	dialog.addEventListener("close", () => {
+		showEditProjectModal.set(null);
+		currentId = null;
+	});
+
+	dialog.querySelectorAll("[data-close]").forEach((el) => {
+		el.addEventListener("click", () => close());
+	});
+
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		if (!currentId) return;
+		if (loadingImages) {
+			alert("Still loading the existing image. Please wait.");
+			return;
+		}
+
+		const coverEntries = coverUploader.getEntries();
+		const cover = coverEntries[0];
+		if (!cover) {
+			alert("Cover image is required");
+			return;
+		}
+
+		submitBtn.disabled = true;
+		deleteBtn.disabled = true;
+		submitLabel.textContent = "Saving…";
+
+		try {
+			const newFile = cover.file ?? null;
+
+			const selectedTools = toolsPicker.getSelected();
+			const toolRefs = selectedTools.map((t) =>
+				doc(firestore, "tools", t.id),
+			);
+
+			const apple = getVal("apple_link");
+			const web = getVal("web_link");
+			const github = getVal("github_link");
+
+			const updated = await updateAppBasicInfo(
+				currentId,
+				getVal("page"),
+				getVal("name"),
+				getVal("description"),
+				apple || null,
+				web || null,
+				github || null,
+				newFile,
+				toolRefs,
+			);
+
+			projects.set(
+				projects.get().map((p) => (p.id === updated.id ? updated : p)),
+			);
+
+			close();
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+			submitBtn.disabled = false;
+			deleteBtn.disabled = false;
+			submitLabel.textContent = "Save Changes";
+		}
+	});
+
+	const confirmDialog = document.getElementById("delete-project-confirm") as HTMLDialogElement;
+	const confirmName = confirmDialog.querySelector("[data-confirm-name]") as HTMLElement;
+	const confirmCancelBtn = confirmDialog.querySelector("[data-confirm-cancel]") as HTMLButtonElement;
+	const confirmDeleteBtn = confirmDialog.querySelector("[data-confirm-delete]") as HTMLButtonElement;
+	const confirmDeleteLabel = confirmDialog.querySelector("[data-confirm-delete-label]") as HTMLSpanElement;
+
+	deleteBtn.addEventListener("click", () => {
+		if (!currentId) return;
+		const project = findProject(currentId);
+		confirmName.textContent = project?.name?.trim() || "this project";
+		confirmDeleteBtn.disabled = false;
+		confirmCancelBtn.disabled = false;
+		confirmDeleteLabel.textContent = "Delete project";
+		confirmDialog.showModal();
+	});
+
+	confirmCancelBtn.addEventListener("click", () => confirmDialog.close());
+
+	confirmDeleteBtn.addEventListener("click", async () => {
+		if (!currentId) return;
+		confirmDeleteBtn.disabled = true;
+		confirmCancelBtn.disabled = true;
+		confirmDeleteLabel.textContent = "Deleting…";
+		deleteBtn.disabled = true;
+
+		const id = currentId;
+		try {
+			await deleteApp(id);
+			projects.set(projects.get().filter((p) => p.id !== id));
+			sections.set(sections.get().filter((s) => s.app.id !== id));
+			confirmDialog.close();
+			close();
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+			confirmDeleteBtn.disabled = false;
+			confirmCancelBtn.disabled = false;
+			confirmDeleteLabel.textContent = "Delete project";
+			deleteBtn.disabled = false;
+		}
+	});
+</script>

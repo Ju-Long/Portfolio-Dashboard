@@ -1,0 +1,51 @@
+---
+import "@/styles/global.css";
+
+interface Props {
+	title?: string;
+}
+
+const { title = "Portfolio Admin" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+		<link
+			rel="stylesheet"
+			href="https://kit.fontawesome.com/89ef39a558.css"
+			crossorigin="anonymous"
+		/>
+
+		<title>{title}</title>
+	</head>
+	<body class="min-h-screen bg-neutral-950 text-neutral-100 antialiased">
+		<slot />
+
+		<script>
+			import { app } from "@firebase/client";
+			import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+
+			declare global {
+				interface Window {
+					FIREBASE_APPCHECK_DEBUG_TOKEN: boolean,
+				}
+			}
+
+			self.FIREBASE_APPCHECK_DEBUG_TOKEN = window.location.host === "localhost:4321";
+
+			(async () => {
+				initializeAppCheck(app, {
+					provider: new ReCaptchaV3Provider(
+						"6Ldp0iUsAAAAAKL34xdqyMdPiLxaOItJV0w5u0lS",
+					),
+					isTokenAutoRefreshEnabled: true,
+				});
+			})();
+		</script>
+	</body>
+</html>
