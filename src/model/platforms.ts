@@ -38,6 +38,7 @@ export const architecture_platform: Platform = {
 export const platforms: Platform[] = [
     web_platform,
     mobile_platform,
+    tablet_platform,
     watch_platform,
     widget_platform,
     desktop_platform,
