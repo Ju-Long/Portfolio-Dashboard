@@ -1,4 +1,4 @@
-import type { App, AppSection, AppTool, Feature } from "@model/app";
+import type { App, AppSection, AppTool, Feature, AppPreview } from "@model/app";
 
 import { firestore, storage } from "./client";
 import { collection, deleteDoc, doc, getDoc, getDocs, query, QueryDocumentSnapshot, setDoc, where, type DocumentData, type DocumentReference } from "firebase/firestore";
@@ -465,3 +465,135 @@ export const setTermsOfUse = async(id: string, content: string): Promise<void> =
     const appRef = doc(firestore, "apps", id);
     await setDoc(doc(firestore, "terms-of-use", id), { content, app: appRef });
 }
+
+// MARK: - Previews
+const convertFirestoreToPreview = (document: QueryDocumentSnapshot<DocumentData, DocumentData>): AppPreview => {
+    const id = document.id;
+    const { width, image, image_path, app } = document.data();
+    const resolved_path: string = image_path ?? extractStoragePath(image) ?? "";
+    return { id, width, image, image_path: resolved_path, app };
+};
+
+export const fetchPreviews = async(app_id: string): Promise<AppPreview[]> => {
+    const app_reference = doc(firestore, "apps", app_id);
+    const previews_query = query(collection(firestore, "previews"), where("app", "==", app_reference));
+    const snapshot = await getDocs(previews_query);
+    return snapshot.docs.map((doc) => convertFirestoreToPreview(doc));
+};
+
+export const addAppPreviews = async(
+    app_id: string,
+    previews: Array<{
+        width: number,
+        image: File | null
+    }>
+): Promise<AppPreview[]> => {
+    const app_reference = doc(firestore, "apps", app_id);
+    const tasks: Array<() => Promise<void>> = [];
+    const uploaded_previews: AppPreview[] = [];
+
+    previews.forEach((preview) => {
+        if (!preview.image) return;
+
+        const preview_doc = doc(collection(firestore, "previews"));
+        const image_path = `previews/${app_id}/${preview.width}`;
+        const image_reference = ref(storage, image_path);
+
+        const placeholder: AppPreview = {
+            id: preview_doc.id,
+            width: preview.width,
+            image: "",
+            image_path,
+            app: app_reference,
+        };
+
+        uploaded_previews.push(placeholder);
+
+        tasks.push(async () => {
+            await uploadBytes(image_reference, preview.image!);
+            placeholder.image = await getDownloadURL(image_reference);
+            await setDoc(preview_doc, placeholder);
+        });
+    });
+
+    await runInBatches(tasks);
+    return uploaded_previews;
+};
+
+export const updateAppPreviews = async(
+    app_id: string,
+    previews: Array<{
+        width: number,
+        image: File | string | null
+    }>
+): Promise<AppPreview[]> => {
+    const app_reference = doc(firestore, "apps", app_id);
+    const existing_previews = await fetchPreviews(app_id);
+    const existing_map = new Map(existing_previews.map((p) => [p.width, p]));
+
+    const tasks: Array<() => Promise<void>> = [];
+    const updated_previews: AppPreview[] = [];
+    const widths_to_keep = new Set<number>();
+
+    previews.forEach((preview) => {
+        if (!preview.image) {
+            const existing = existing_map.get(preview.width);
+            if (existing) {
+                widths_to_keep.add(preview.width);
+                updated_previews.push(existing);
+            }
+            return;
+        }
+
+        widths_to_keep.add(preview.width);
+
+        if (typeof preview.image === "string") {
+            const existing = existing_map.get(preview.width);
+            if (existing) {
+                updated_previews.push(existing);
+            }
+            return;
+        }
+
+        const preview_doc = existing_map.get(preview.width)
+            ? doc(firestore, "previews", existing_map.get(preview.width)!.id)
+            : doc(collection(firestore, "previews"));
+
+        const image_path = `previews/${app_id}/${preview.width}`;
+        const image_reference = ref(storage, image_path);
+
+        const placeholder: AppPreview = {
+            id: preview_doc.id,
+            width: preview.width,
+            image: "",
+            image_path,
+            app: app_reference,
+        };
+
+        updated_previews.push(placeholder);
+
+        tasks.push(async () => {
+            await uploadBytes(image_reference, preview.image as File);
+            placeholder.image = await getDownloadURL(image_reference);
+            await setDoc(preview_doc, placeholder);
+        });
+    });
+
+    await runInBatches(tasks);
+
+    // Delete previews that are no longer in use
+    for (const existing of existing_previews) {
+        if (!widths_to_keep.has(existing.width)) {
+            await deleteStoragePath(existing.image_path).catch(() => {});
+            await deleteDoc(doc(firestore, "previews", existing.id)).catch(() => {});
+        }
+    }
+
+    return updated_previews;
+};
+
+export const deleteAppPreviews = async(app_id: string): Promise<void> => {
+    const previews = await fetchPreviews(app_id);
+    await Promise.all(previews.map((p) => deleteDoc(doc(firestore, "previews", p.id))));
+    await Promise.all(previews.map((p) => deleteStoragePath(p.image_path)));
+};

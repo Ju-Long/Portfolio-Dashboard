@@ -25,7 +25,7 @@ import ModalHeader from "./components/ModalHeader.astro";
 
 <script>
 	import type { AppTool } from "@model/app";
-	import { addAppBasicInfo } from "@firebase/sync";
+	import { addAppBasicInfo, addAppPreviews } from "@firebase/sync";
 	import { firestore } from "@firebase/client";
 	import { doc } from "firebase/firestore";
 	import { projects, showAddProjectModal } from "@/states";
@@ -36,6 +36,7 @@ import ModalHeader from "./components/ModalHeader.astro";
 	};
 	type ImageUploaderEl = HTMLElement & {
 		getFile(): File | null;
+		getEntries(): Array<{ file?: File; url?: string }>;
 		clear(): void;
 	};
 
@@ -52,10 +53,19 @@ import ModalHeader from "./components/ModalHeader.astro";
 	) as ImageUploaderEl;
 	const toolsPicker = dialog.querySelector("tools-picker") as ToolsPickerEl;
 
+	const previewUploaders = {
+		1920: dialog.querySelector('image-uploader[data-name="preview-1920"]') as ImageUploaderEl,
+		1366: dialog.querySelector('image-uploader[data-name="preview-1366"]') as ImageUploaderEl,
+		1024: dialog.querySelector('image-uploader[data-name="preview-1024"]') as ImageUploaderEl,
+		768: dialog.querySelector('image-uploader[data-name="preview-768"]') as ImageUploaderEl,
+		433: dialog.querySelector('image-uploader[data-name="preview-433"]') as ImageUploaderEl,
+	};
+
 	function reset() {
 		form.reset();
 		coverUploader.clear();
 		toolsPicker.clear();
+		Object.values(previewUploaders).forEach((uploader) => uploader.clear());
 		saveBtn.disabled = false;
 		saveLabel.textContent = "Save";
 	}
@@ -123,6 +133,17 @@ import ModalHeader from "./components/ModalHeader.astro";
 				mainFile,
 				toolRefs,
 			);
+
+			// Upload previews
+			const previewWidths = [1920, 1366, 1024, 768, 433] as const;
+			const previewsToUpload = previewWidths.map((width) => ({
+				width,
+				image: previewUploaders[width as keyof typeof previewUploaders].getFile(),
+			}));
+
+			if (previewsToUpload.some((p) => p.image)) {
+				await addAppPreviews(created.id, previewsToUpload);
+			}
 
 			projects.set([...projects.get(), created]);
 			close();

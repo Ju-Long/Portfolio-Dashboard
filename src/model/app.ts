@@ -56,3 +56,11 @@ export interface TermsOfUse {
     content: string,
     app: DocumentReference
 }
+
+export interface AppPreview {
+    id: string,
+    width: number,
+    image: string,
+    image_path: string,
+    app: DocumentReference
+}

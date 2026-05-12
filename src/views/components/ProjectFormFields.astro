@@ -57,3 +57,29 @@ import ToolsPicker from "./ToolsPicker.astro";
 	<legend class="modal-legend mb-2 block">Tools</legend>
 	<ToolsPicker />
 </fieldset>
+
+<fieldset class="space-y-3">
+	<legend class="modal-legend mb-2 block">App Previews</legend>
+	<div class="grid grid-cols-1 gap-4">
+		<div>
+			<span class="field-label">1920px</span>
+			<ImageUploader name="preview-1920" />
+		</div>
+		<div>
+			<span class="field-label">1366px</span>
+			<ImageUploader name="preview-1366" />
+		</div>
+		<div>
+			<span class="field-label">1024px</span>
+			<ImageUploader name="preview-1024" />
+		</div>
+		<div>
+			<span class="field-label">768px</span>
+			<ImageUploader name="preview-768" />
+		</div>
+		<div>
+			<span class="field-label">433px</span>
+			<ImageUploader name="preview-433" />
+		</div>
+	</div>
+</fieldset>

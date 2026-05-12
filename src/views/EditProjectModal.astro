@@ -73,10 +73,10 @@ import ModalHeader from "./components/ModalHeader.astro";
 </dialog>
 
 <script>
-	import type { App, AppTool } from "@model/app";
+	import type { App, AppTool, AppPreview } from "@model/app";
 	import { firestore } from "@firebase/client";
 	import { doc } from "firebase/firestore";
-	import { deleteApp, updateAppBasicInfo } from "@firebase/sync";
+	import { deleteApp, updateAppBasicInfo, fetchPreviews, updateAppPreviews } from "@firebase/sync";
 	import { projects, sections, showEditProjectModal } from "@/states";
 
 	type ToolsPickerEl = HTMLElement & {
@@ -101,6 +101,14 @@ import ModalHeader from "./components/ModalHeader.astro";
 		'image-uploader[data-name="main-image"]',
 	) as ImageUploaderEl;
 	const toolsPicker = dialog.querySelector("tools-picker") as ToolsPickerEl;
+
+	const previewUploaders = {
+		1920: dialog.querySelector('image-uploader[data-name="preview-1920"]') as ImageUploaderEl,
+		1366: dialog.querySelector('image-uploader[data-name="preview-1366"]') as ImageUploaderEl,
+		1024: dialog.querySelector('image-uploader[data-name="preview-1024"]') as ImageUploaderEl,
+		768: dialog.querySelector('image-uploader[data-name="preview-768"]') as ImageUploaderEl,
+		433: dialog.querySelector('image-uploader[data-name="preview-433"]') as ImageUploaderEl,
+	};
 
 	let currentId: string | null = null;
 	let loadingImages = false;
@@ -130,6 +138,7 @@ import ModalHeader from "./components/ModalHeader.astro";
 		setVal("github_link", project.github_link ?? "");
 
 		coverUploader.clear();
+		Object.values(previewUploaders).forEach((uploader) => uploader.clear());
 
 		const refs = (project.tools ?? []).map((t) => ({
 			id: typeof t === "string" ? t : t.id,
@@ -141,6 +150,18 @@ import ModalHeader from "./components/ModalHeader.astro";
 
 		if (project.image) {
 			await coverUploader.loadExisting([project.image]);
+		}
+
+		// Load existing previews
+		const existingPreviews = await fetchPreviews(project.id);
+		const previewsByWidth = new Map(existingPreviews.map((p) => [p.width, p]));
+
+		const previewWidths = [1920, 1366, 1024, 768, 433] as const;
+		for (const width of previewWidths) {
+			const preview = previewsByWidth.get(width);
+			if (preview && preview.image) {
+				await previewUploaders[width].loadExisting([preview.image]);
+			}
 		}
 	}
 
@@ -226,6 +247,18 @@ import ModalHeader from "./components/ModalHeader.astro";
 				newFile,
 				toolRefs,
 			);
+
+			// Update previews
+			const previewWidths = [1920, 1366, 1024, 768, 433] as const;
+			const previewsToUpdate = previewWidths.map((width) => {
+				const entries = previewUploaders[width].getEntries();
+				return {
+					width,
+					image: entries[0]?.file ?? entries[0]?.url ?? null,
+				};
+			});
+
+			await updateAppPreviews(currentId, previewsToUpdate);
 
 			projects.set(
 				projects.get().map((p) => (p.id === updated.id ? updated : p)),
