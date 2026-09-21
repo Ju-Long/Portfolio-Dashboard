@@ -77,7 +77,7 @@ import ModalHeader from "./components/ModalHeader.astro";
 	import { firestore } from "@firebase/client";
 	import { doc } from "firebase/firestore";
 	import { deleteApp, updateAppBasicInfo, fetchPreviews, updateAppPreviews } from "@firebase/sync";
-	import { projects, sections, showEditProjectModal } from "@/states";
+	import { projects, sections, versions, showEditProjectModal } from "@/states";
 
 	type ToolsPickerEl = HTMLElement & {
 		getSelected(): AppTool[];
@@ -302,8 +302,12 @@ import ModalHeader from "./components/ModalHeader.astro";
 		const id = currentId;
 		try {
 			await deleteApp(id);
+			const appVersionIds = new Set(
+				versions.get().filter((v) => v.app?.id === id).map((v) => v.id),
+			);
 			projects.set(projects.get().filter((p) => p.id !== id));
-			sections.set(sections.get().filter((s) => s.app.id !== id));
+			sections.set(sections.get().filter((s) => !appVersionIds.has(s.version?.id)));
+			versions.set(versions.get().filter((v) => v.app?.id !== id));
 			confirmDialog.close();
 			close();
 		} catch (err) {

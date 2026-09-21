@@ -173,7 +173,7 @@ import PlatformPicker from "./components/PlatformPicker.astro";
 	const addFeatureBtn = dialog.querySelector("[data-add-feature]") as HTMLButtonElement;
 
 	let mode: "add" | "edit" = "add";
-	let currentAppId: string | null = null;
+	let currentVersionId: string | null = null;
 	let currentSectionId: string | null = null;
 	let loadingImages = false;
 
@@ -280,9 +280,9 @@ import PlatformPicker from "./components/PlatformPicker.astro";
 		await Promise.all(imageLoads);
 	}
 
-	function openAdd(appId: string) {
+	function openAdd(versionId: string) {
 		mode = "add";
-		currentAppId = appId;
+		currentVersionId = versionId;
 		currentSectionId = null;
 		resetForm();
 		deleteBtn.classList.add("hidden");
@@ -290,14 +290,14 @@ import PlatformPicker from "./components/PlatformPicker.astro";
 		if (!dialog.open) dialog.showModal();
 	}
 
-	function openEdit(appId: string, sectionId: string) {
+	function openEdit(versionId: string, sectionId: string) {
 		const section = sections.get().find((s) => s.id === sectionId);
 		if (!section) {
 			showEditSectionModal.set(null);
 			return;
 		}
 		mode = "edit";
-		currentAppId = appId;
+		currentVersionId = versionId;
 		currentSectionId = sectionId;
 		resetForm();
 		deleteBtn.classList.remove("hidden");
@@ -316,21 +316,21 @@ import PlatformPicker from "./components/PlatformPicker.astro";
 		dialog.close();
 		showAddSectionModal.set(null);
 		showEditSectionModal.set(null);
-		currentAppId = null;
+		currentVersionId = null;
 		currentSectionId = null;
 	}
 
-	showAddSectionModal.listen((appId) => {
-		if (appId) openAdd(appId);
+	showAddSectionModal.listen((data) => {
+		if (data) openAdd(data.versionId);
 	});
 	showEditSectionModal.listen((data) => {
-		if (data) openEdit(data.appId, data.sectionId);
+		if (data) openEdit(data.versionId, data.sectionId);
 	});
 
 	dialog.addEventListener("close", () => {
 		showAddSectionModal.set(null);
 		showEditSectionModal.set(null);
-		currentAppId = null;
+		currentVersionId = null;
 		currentSectionId = null;
 	});
 
@@ -422,7 +422,7 @@ import PlatformPicker from "./components/PlatformPicker.astro";
 
 	form.addEventListener("submit", async (e) => {
 		e.preventDefault();
-		if (!currentAppId) return;
+		if (!currentVersionId) return;
 		if (loadingImages) {
 			alert("Still loading existing images. Please wait.");
 			return;
@@ -446,7 +446,7 @@ import PlatformPicker from "./components/PlatformPicker.astro";
 			if (mode === "add") {
 				const features = collectFeaturesForUpload();
 				const created = await addAppSection(
-					currentAppId,
+					currentVersionId,
 					title,
 					description,
 					platform.name,
@@ -458,7 +458,7 @@ import PlatformPicker from "./components/PlatformPicker.astro";
 				const features = collectFeaturesForEdit();
 				const updated = await updateAppSection(
 					currentSectionId,
-					currentAppId,
+					currentVersionId,
 					title,
 					description,
 					platform.name,

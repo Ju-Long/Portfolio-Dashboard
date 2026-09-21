@@ -1,0 +1,235 @@
+---
+import ModalHeader from "./components/ModalHeader.astro";
+---
+
+<dialog id="version-modal" class="modal-dialog max-w-md">
+	<form id="version-form" class="flex flex-col">
+		<ModalHeader title="Version"/>
+
+		<div class="modal-body space-y-4">
+			<label class="block">
+				<span class="field-label-sm">Version</span>
+				<input data-version-field="version" type="text" placeholder="e.g. 1.0" class="field-input-md" required/>
+			</label>
+		</div>
+
+		<footer class="modal-footer justify-between">
+			<button type="button" id="version-delete-btn" class="btn-danger hidden">
+				<i class="fa-solid fa-trash"></i>
+				Delete
+			</button>
+			<div class="flex flex-1 items-center justify-end gap-2">
+				<button type="button" data-close class="btn-secondary">
+					Cancel
+				</button>
+				<button type="submit" id="version-submit-btn" class="btn-primary">
+					<i class="fa-solid fa-floppy-disk"></i>
+					<span data-version-submit-label>Save</span>
+				</button>
+			</div>
+		</footer>
+	</form>
+</dialog>
+
+<dialog
+	id="delete-version-confirm"
+	class="m-auto w-full max-w-md rounded-2xl border border-rose-500/30 bg-neutral-950 p-0 text-neutral-100 shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm"
+>
+	<div class="flex flex-col">
+		<header class="flex items-center gap-3 border-b border-neutral-800 px-6 py-4">
+			<div class="grid h-10 w-10 place-items-center rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-300">
+				<i class="fa-solid fa-triangle-exclamation"></i>
+			</div>
+			<div>
+				<h2 class="text-base font-semibold text-rose-200">Delete version?</h2>
+				<p class="text-xs text-neutral-400">This action cannot be undone.</p>
+			</div>
+		</header>
+
+		<div class="space-y-3 px-6 py-5 text-sm text-neutral-300">
+			<p>
+				You are about to permanently delete version
+				<strong data-version-confirm-name class="text-neutral-100">this version</strong>.
+			</p>
+			<ul class="list-disc space-y-1 pl-5 text-neutral-400">
+				<li>All sections under this version and their uploaded files will be removed.</li>
+			</ul>
+		</div>
+
+		<footer class="modal-footer justify-end">
+			<button type="button" data-version-confirm-cancel class="btn-secondary">
+				Cancel
+			</button>
+			<button type="button" data-version-confirm-delete class="btn-danger">
+				<i class="fa-solid fa-trash"></i>
+				<span data-version-confirm-delete-label>Delete version</span>
+			</button>
+		</footer>
+	</div>
+</dialog>
+
+<script>
+	import { addVersion, updateVersion, deleteVersion } from "@firebase/sync";
+	import {
+		versions,
+		sections,
+		selectedVersions,
+		showAddVersionModal,
+		showEditVersionModal,
+	} from "@/states";
+
+	const dialog = document.getElementById("version-modal") as HTMLDialogElement;
+	const form = document.getElementById("version-form") as HTMLFormElement;
+	const input = dialog.querySelector('[data-version-field="version"]') as HTMLInputElement;
+	const submitBtn = document.getElementById("version-submit-btn") as HTMLButtonElement;
+	const submitLabel = submitBtn.querySelector("[data-version-submit-label]") as HTMLSpanElement;
+	const deleteBtn = document.getElementById("version-delete-btn") as HTMLButtonElement;
+
+	let mode: "add" | "edit" = "add";
+	let currentAppId: string | null = null;
+	let currentVersionId: string | null = null;
+
+	function resetButtons() {
+		submitBtn.disabled = false;
+		deleteBtn.disabled = false;
+		submitLabel.textContent = "Save";
+	}
+
+	function openAdd(appId: string) {
+		mode = "add";
+		currentAppId = appId;
+		currentVersionId = null;
+		input.value = "";
+		deleteBtn.classList.add("hidden");
+		resetButtons();
+		if (!dialog.open) dialog.showModal();
+		input.focus();
+	}
+
+	function openEdit(appId: string, versionId: string) {
+		const version = versions.get().find((v) => v.id === versionId);
+		if (!version) {
+			showEditVersionModal.set(null);
+			return;
+		}
+		mode = "edit";
+		currentAppId = appId;
+		currentVersionId = versionId;
+		input.value = version.version ?? "";
+		deleteBtn.classList.remove("hidden");
+		resetButtons();
+		if (!dialog.open) dialog.showModal();
+		input.focus();
+	}
+
+	function close() {
+		dialog.close();
+		showAddVersionModal.set(null);
+		showEditVersionModal.set(null);
+		currentAppId = null;
+		currentVersionId = null;
+	}
+
+	showAddVersionModal.listen((appId) => {
+		if (appId) openAdd(appId);
+	});
+	showEditVersionModal.listen((data) => {
+		if (data) openEdit(data.appId, data.versionId);
+	});
+
+	dialog.addEventListener("close", () => {
+		showAddVersionModal.set(null);
+		showEditVersionModal.set(null);
+		currentAppId = null;
+		currentVersionId = null;
+	});
+
+	dialog.querySelectorAll("[data-close]").forEach((el) => {
+		el.addEventListener("click", () => close());
+	});
+
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		if (!currentAppId) return;
+		const text = input.value.trim();
+		if (!text) {
+			alert("Version is required");
+			return;
+		}
+
+		submitBtn.disabled = true;
+		deleteBtn.disabled = true;
+		submitLabel.textContent = "Saving…";
+
+		try {
+			if (mode === "add") {
+				const created = await addVersion(currentAppId, text);
+				versions.set([...versions.get(), created]);
+				selectedVersions.set({
+					...selectedVersions.get(),
+					[currentAppId]: created.id,
+				});
+			} else if (mode === "edit" && currentVersionId) {
+				const updated = await updateVersion(currentVersionId, currentAppId, text);
+				versions.set(
+					versions.get().map((v) => (v.id === updated.id ? updated : v)),
+				);
+			}
+			close();
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+			resetButtons();
+		}
+	});
+
+	const confirmDialog = document.getElementById("delete-version-confirm") as HTMLDialogElement;
+	const confirmName = confirmDialog.querySelector("[data-version-confirm-name]") as HTMLElement;
+	const confirmCancelBtn = confirmDialog.querySelector("[data-version-confirm-cancel]") as HTMLButtonElement;
+	const confirmDeleteBtn = confirmDialog.querySelector("[data-version-confirm-delete]") as HTMLButtonElement;
+	const confirmDeleteLabel = confirmDialog.querySelector("[data-version-confirm-delete-label]") as HTMLSpanElement;
+
+	deleteBtn.addEventListener("click", () => {
+		if (mode !== "edit" || !currentVersionId) return;
+		confirmName.textContent = input.value.trim() || "this version";
+		confirmDeleteBtn.disabled = false;
+		confirmCancelBtn.disabled = false;
+		confirmDeleteLabel.textContent = "Delete version";
+		confirmDialog.showModal();
+	});
+
+	confirmCancelBtn.addEventListener("click", () => confirmDialog.close());
+
+	confirmDeleteBtn.addEventListener("click", async () => {
+		if (!currentVersionId) return;
+		confirmDeleteBtn.disabled = true;
+		confirmCancelBtn.disabled = true;
+		confirmDeleteLabel.textContent = "Deleting…";
+		deleteBtn.disabled = true;
+
+		const versionId = currentVersionId;
+		const appId = currentAppId;
+		try {
+			await deleteVersion(versionId);
+			versions.set(versions.get().filter((v) => v.id !== versionId));
+			sections.set(sections.get().filter((s) => s.version?.id !== versionId));
+			if (appId) {
+				const current = selectedVersions.get();
+				if (current[appId] === versionId) {
+					const next = { ...current };
+					delete next[appId];
+					selectedVersions.set(next);
+				}
+			}
+			confirmDialog.close();
+			close();
+		} catch (err) {
+			console.error(err);
+			alert((err as Error).message);
+			confirmDeleteBtn.disabled = false;
+			confirmCancelBtn.disabled = false;
+			confirmDeleteLabel.textContent = "Delete version";
+			deleteBtn.disabled = false;
+		}
+	});
+</script>

@@ -1,4 +1,4 @@
-import type { App, AppSection, AppTool, Feature, AppPreview } from "@model/app";
+import type { App, AppSection, AppTool, Feature, AppPreview, Version } from "@model/app";
 
 import { firestore, storage } from "./client";
 import { collection, deleteDoc, doc, getDoc, getDocs, query, QueryDocumentSnapshot, setDoc, where, type DocumentData, type DocumentReference } from "firebase/firestore";
@@ -141,10 +141,65 @@ export const addAppBasicInfo = async(
     return app;
 }
 
+// MARK: - Versions
+const convertFirestoreToVersion = (document: QueryDocumentSnapshot<DocumentData, DocumentData>): Version => {
+    const id = document.id;
+    const { version, app } = document.data();
+    return { id, version, app }
+}
+
+export const fetchAllVersions = async(): Promise<Version[]> => {
+    const snapshot = await getDocs(collection(firestore, "versions"));
+    return snapshot.docs.map((doc) => convertFirestoreToVersion(doc));
+}
+
+export const addVersion = async(
+    app_id: string,
+    version: string,
+): Promise<Version> => {
+    const app_reference = doc(firestore, "apps", app_id);
+    const version_doc = doc(collection(firestore, "versions"));
+
+    const new_version: Version = {
+        id: version_doc.id,
+        version: version,
+        app: app_reference,
+    };
+
+    await setDoc(version_doc, new_version);
+    return new_version;
+}
+
+export const updateVersion = async(
+    version_id: string,
+    app_id: string,
+    version: string,
+): Promise<Version> => {
+    const app_reference = doc(firestore, "apps", app_id);
+    const version_doc = doc(firestore, "versions", version_id);
+
+    const updated_version: Version = {
+        id: version_id,
+        version: version,
+        app: app_reference,
+    };
+
+    await setDoc(version_doc, updated_version);
+    return updated_version;
+}
+
+export const deleteVersion = async(version_id: string): Promise<void> => {
+    const version_reference = doc(firestore, "versions", version_id);
+    const sections_query = query(collection(firestore, "sections"), where("version", "==", version_reference));
+    const sections_snap = await getDocs(sections_query);
+    await Promise.all(sections_snap.docs.map((d) => deleteAppSection(d.id)));
+    await deleteDoc(version_reference);
+}
+
 // MARK: - App Sections
 const convertFirestoreToSection = (document: QueryDocumentSnapshot<DocumentData, DocumentData>): AppSection => {
     const id = document.id;
-    const { title, description, platform, features, feature_type, app } = document.data();
+    const { title, description, platform, features, feature_type, version } = document.data();
     const resolved_features: Feature[] = (features ?? []).map((f: any): Feature => {
         const image: string | null = f.image ?? null;
         const frames: string[] | null = f.frames ?? null;
@@ -160,14 +215,7 @@ const convertFirestoreToSection = (document: QueryDocumentSnapshot<DocumentData,
             frame_paths,
         };
     });
-    return { id, title, description, platform, features: resolved_features, feature_type, app }
-}
-
-export const fetchSections = async(id: string): Promise<AppSection[]> => {
-    const app_reference = doc(firestore, "apps", id);
-    const sections_query = query(collection(firestore, "sections"), where("app", "==", app_reference));
-    const snapshot = await getDocs(sections_query);
-    return snapshot.docs.map((doc) => convertFirestoreToSection(doc));
+    return { id, title, description, platform, features: resolved_features, feature_type, version }
 }
 
 export const fetchAllSections = async(): Promise<AppSection[]> => {
@@ -176,7 +224,7 @@ export const fetchAllSections = async(): Promise<AppSection[]> => {
 }
 
 export const addAppSection = async(
-    id: string,
+    version_id: string,
     title: string,
     description: string,
     platform: string,
@@ -188,7 +236,7 @@ export const addAppSection = async(
         frames: File[] | null
     }[],
 ): Promise<AppSection> => {
-    const app_reference = doc(firestore, "apps", id);
+    const version_reference = doc(firestore, "versions", version_id);
     const section_doc = doc(collection(firestore, "sections"));
 
     const uploaded_features: Feature[] = [];
@@ -244,7 +292,7 @@ export const addAppSection = async(
         platform: platform,
         features: uploaded_features,
         feature_type: feature_type,
-        app: app_reference
+        version: version_reference
     };
 
     await setDoc(section_doc, section);
@@ -253,7 +301,7 @@ export const addAppSection = async(
 
 export const updateAppSection = async(
     section_id: string,
-    app_id: string,
+    version_id: string,
     title: string,
     description: string,
     platform: string,
@@ -265,7 +313,7 @@ export const updateAppSection = async(
         frames: (File | string)[] | null
     }[],
 ): Promise<AppSection> => {
-    const app_reference = doc(firestore, "apps", app_id);
+    const version_reference = doc(firestore, "versions", version_id);
     const section_doc = doc(firestore, "sections", section_id);
 
     const existing_snap = await getDoc(section_doc);
@@ -361,7 +409,7 @@ export const updateAppSection = async(
         platform: platform,
         features: uploaded_features,
         feature_type: feature_type,
-        app: app_reference
+        version: version_reference
     };
 
     await setDoc(section_doc, section);
@@ -429,9 +477,9 @@ const deleteStorageFolder = async (path: string): Promise<void> => {
 
 export const deleteApp = async(id: string): Promise<void> => {
     const app_reference = doc(firestore, "apps", id);
-    const sections_query = query(collection(firestore, "sections"), where("app", "==", app_reference));
-    const sections_snap = await getDocs(sections_query);
-    await Promise.all(sections_snap.docs.map((d) => deleteAppSection(d.id)));
+    const versions_query = query(collection(firestore, "versions"), where("app", "==", app_reference));
+    const versions_snap = await getDocs(versions_query);
+    await Promise.all(versions_snap.docs.map((d) => deleteVersion(d.id)));
 
     await Promise.all([
         deleteDoc(doc(firestore, "privacy-policies", id)).catch(() => {}),

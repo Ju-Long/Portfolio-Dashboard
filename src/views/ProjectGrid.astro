@@ -11,12 +11,16 @@
     import {
         projects,
         sections,
+        versions,
+        selectedVersions,
         showAddSectionModal,
+        showAddVersionModal,
+        showEditVersionModal,
         showEditPolicyModal,
         showEditProjectModal,
         showEditSectionModal,
     } from "@/states";
-    import type { App, AppSection } from "@model/app";
+    import type { App, AppSection, Version } from "@model/app";
     import { platforms } from "@model/platforms";
 
     const list = document.getElementById("project-list") as HTMLElement;
@@ -35,7 +39,44 @@
             ?? "fa-duotone fa-light fa-cube";
     }
 
-    function renderSectionButtons(appSections: AppSection[]): string {
+    function renderVersionTabs(appId: string, appVersions: Version[], selectedId: string | null): string {
+        const tabs = appVersions
+            .map((v) => {
+                const active = v.id === selectedId;
+                const wrapCls = active
+                    ? "border-indigo-500/50 bg-indigo-500/10"
+                    : "border-neutral-800 bg-neutral-950 hover:border-neutral-700";
+                const labelCls = active ? "text-indigo-200" : "text-neutral-300";
+                const editBtn = active
+                    ? `<button type="button" data-edit-version="${v.id}" data-app="${appId}" class="border-l border-indigo-500/30 px-1.5 py-1 text-indigo-300/70 transition hover:bg-indigo-500/20 hover:text-indigo-100" title="Edit version"><i class="fa-solid fa-pen text-[9px]"></i></button>`
+                    : "";
+                return `
+                    <div class="inline-flex items-center overflow-hidden rounded-md border ${wrapCls} transition">
+                        <button type="button" data-select-version="${v.id}" data-app="${appId}" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs ${labelCls}">
+                            <i class="fa-solid fa-code-branch text-[10px] opacity-70"></i>
+                            <span>${escapeHtml(v.version || "—")}</span>
+                        </button>
+                        ${editBtn}
+                    </div>
+                `;
+            })
+            .join("");
+
+        const empty = appVersions.length === 0
+            ? `<span class="text-xs text-neutral-600">No versions yet</span>`
+            : "";
+
+        const addBtn = `
+            <button type="button" data-add-version="${appId}" class="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-700 px-2.5 py-1 text-xs text-neutral-400 transition hover:border-neutral-500 hover:text-neutral-200">
+                <i class="fa-solid fa-plus text-[10px]"></i>
+                Version
+            </button>
+        `;
+
+        return `<div class="flex flex-wrap items-center gap-1.5">${empty}${tabs}${addBtn}</div>`;
+    }
+
+    function renderSectionButtons(appId: string, versionId: string, appSections: AppSection[]): string {
         if (appSections.length === 0) {
             return `
                 <div class="col-span-full grid place-items-center rounded-md border border-dashed border-neutral-800 bg-neutral-950/40 px-3 py-4 text-xs text-neutral-500">
@@ -50,7 +91,9 @@
                 return `
                     <button
                         type="button"
-                        data-section-id="${section.id}"
+                        data-section="${section.id}"
+                        data-app="${appId}"
+                        data-version="${versionId}"
                         class="flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-left text-xs text-neutral-300 transition hover:border-indigo-500/40 hover:bg-neutral-900 hover:text-neutral-100"
                         title="Edit ${escapeHtml(label)}"
                     >
@@ -63,14 +106,28 @@
             .join("");
     }
 
-    function renderProject(project: App, appSections: AppSection[]): string {
+    function renderProject(
+        project: App,
+        appVersions: Version[],
+        selectedId: string | null,
+        selectedSections: AppSection[],
+    ): string {
         const image = project.image
             ? `<img src="${project.image}" alt="${escapeHtml(project.name)}" class="h-full w-full object-cover" loading="lazy"/>`
             : `<div class="grid h-full place-items-center text-neutral-700"><i class="fa-solid fa-image"></i></div>`;
 
+        const sectionsArea = selectedId
+            ? `<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">${renderSectionButtons(project.id, selectedId, selectedSections)}</div>`
+            : `<div class="grid place-items-center rounded-md border border-dashed border-neutral-800 bg-neutral-950/40 px-3 py-4 text-xs text-neutral-500">Add a version to start adding sections.</div>`;
+
+        const addSectionDisabled = selectedId ? "" : "disabled";
+        const addSectionCls = selectedId
+            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:border-emerald-400 hover:bg-emerald-500/20"
+            : "cursor-not-allowed border-neutral-800 bg-neutral-900/40 text-neutral-600";
+
         return `
             <div class="flex flex-col gap-3 md:flex-row md:items-stretch">
-                <div class="flex min-w-0 flex-1 flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 md:flex-row md:items-center">
+                <div class="flex min-w-0 flex-1 flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 md:flex-row md:items-start">
                     <div class="flex min-w-0 items-center gap-3 md:w-72 md:shrink-0">
                         <div class="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950">
                             ${image}
@@ -87,8 +144,9 @@
                         </div>
                     </div>
 
-                    <div class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                        ${renderSectionButtons(appSections)}
+                    <div class="flex min-w-0 flex-1 flex-col gap-3">
+                        ${renderVersionTabs(project.id, appVersions, selectedId)}
+                        ${sectionsArea}
                     </div>
                 </div>
 
@@ -103,8 +161,10 @@
                     </button>
                     <button
                         type="button"
-                        data-add-section-id="${project.id}"
-                        class="inline-flex items-center justify-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                        data-add-section="${project.id}"
+                        data-version="${selectedId ?? ""}"
+                        ${addSectionDisabled}
+                        class="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition ${addSectionCls}"
                     >
                         <i class="fa-solid fa-plus"></i>
                         Add section
@@ -125,6 +185,8 @@
     function render() {
         const allProjects = projects.get();
         const allSections = sections.get();
+        const allVersions = versions.get();
+        const sel = selectedVersions.get();
 
         if (allProjects.length === 0) {
             list.innerHTML = `
@@ -140,8 +202,15 @@
 
         list.innerHTML = allProjects
             .map((project) => {
-                const appSections = allSections.filter((s) => s.app?.id === project.id);
-                return renderProject(project, appSections);
+                const appVersions = allVersions.filter((v) => v.app?.id === project.id);
+                let selectedId: string | null = sel[project.id] ?? null;
+                if (!selectedId || !appVersions.some((v) => v.id === selectedId)) {
+                    selectedId = appVersions[0]?.id ?? null;
+                }
+                const selectedSections = selectedId
+                    ? allSections.filter((s) => s.version?.id === selectedId)
+                    : [];
+                return renderProject(project, appVersions, selectedId, selectedSections);
             })
             .join("");
 
@@ -152,13 +221,6 @@
             });
         });
 
-        list.querySelectorAll<HTMLElement>("[data-add-section-id]").forEach((el) => {
-            el.addEventListener("click", () => {
-                const id = el.getAttribute("data-add-section-id");
-                if (id) showAddSectionModal.set(id);
-            });
-        });
-
         list.querySelectorAll<HTMLElement>("[data-policy-id]").forEach((el) => {
             el.addEventListener("click", () => {
                 const id = el.getAttribute("data-policy-id");
@@ -166,17 +228,52 @@
             });
         });
 
-        list.querySelectorAll<HTMLElement>("[data-section-id]").forEach((el) => {
+        list.querySelectorAll<HTMLElement>("[data-add-version]").forEach((el) => {
             el.addEventListener("click", () => {
-                const sectionId = el.getAttribute("data-section-id");
-                if (!sectionId) return;
-                const section = sections.get().find((s) => s.id === sectionId);
-                if (!section) return;
-                showEditSectionModal.set({ appId: section.app.id, sectionId });
+                const appId = el.getAttribute("data-add-version");
+                if (appId) showAddVersionModal.set(appId);
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>("[data-edit-version]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const versionId = el.getAttribute("data-edit-version");
+                const appId = el.getAttribute("data-app");
+                if (appId && versionId) showEditVersionModal.set({ appId, versionId });
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>("[data-select-version]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const versionId = el.getAttribute("data-select-version");
+                const appId = el.getAttribute("data-app");
+                if (!appId || !versionId) return;
+                selectedVersions.set({ ...selectedVersions.get(), [appId]: versionId });
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>("[data-add-section]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const appId = el.getAttribute("data-add-section");
+                const versionId = el.getAttribute("data-version");
+                if (appId && versionId) showAddSectionModal.set({ appId, versionId });
+            });
+        });
+
+        list.querySelectorAll<HTMLElement>("[data-section]").forEach((el) => {
+            el.addEventListener("click", () => {
+                const sectionId = el.getAttribute("data-section");
+                const appId = el.getAttribute("data-app");
+                const versionId = el.getAttribute("data-version");
+                if (sectionId && appId && versionId) {
+                    showEditSectionModal.set({ appId, versionId, sectionId });
+                }
             });
         });
     }
 
     projects.listen(() => render());
     sections.listen(() => render());
+    versions.listen(() => render());
+    selectedVersions.listen(() => render());
 </script>

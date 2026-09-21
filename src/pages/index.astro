@@ -3,6 +3,7 @@ import Layout from "@layouts/Layout.astro";
 
 import AddProjectModal from "@views/AddProjectModal.astro";
 import EditProjectModal from "@views/EditProjectModal.astro";
+import VersionModal from "@views/VersionModal.astro";
 import EditSectionModal from "@views/EditSectionModal.astro";
 import PolicyEditorModal from "@views/PolicyEditorModal.astro";
 import AddToolModal from "@views/components/AddToolModal.astro";
@@ -21,28 +22,32 @@ import ProjectGrid from "@views/ProjectGrid.astro";
 
 	<AddProjectModal/>
 	<EditProjectModal/>
+	<VersionModal/>
 	<EditSectionModal/>
 	<PolicyEditorModal/>
 	<AddToolModal/>
 
 	<script>
-		import { projects, sections, tools } from "@/states"
+		import { projects, sections, tools, versions } from "@/states"
 
-		import { fetchApps, fetchAllSections, fetchTools } from "@firebase/sync";
+		import { fetchApps, fetchAllSections, fetchAllVersions, fetchTools } from "@firebase/sync";
 
 		async function init() {
-			const [fetched_apps, fetched_tools, fetched_sections] = await Promise.all([
+			const [fetched_apps, fetched_tools, fetched_versions, fetched_sections] = await Promise.all([
 				fetchApps(),
 				fetchTools(),
+				fetchAllVersions(),
 				fetchAllSections(),
 			]);
 
 			console.log("Apps:", fetched_apps);
 			console.log("Tools:", fetched_tools);
+			console.log("Versions:", fetched_versions);
 			console.log("Sections:", fetched_sections);
 
 			projects.set(fetched_apps);
 			tools.set(fetched_tools);
+			versions.set(fetched_versions);
 			sections.set(fetched_sections);
 		}
 

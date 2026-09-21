@@ -13,6 +13,12 @@ export interface App {
     tools: DocumentReference[]
 }
 
+export interface Version {
+    id: string,
+    version: string,
+    app: DocumentReference
+}
+
 export interface AppSection {
     id: string,
     title: string,
@@ -20,7 +26,7 @@ export interface AppSection {
     platform: string, // name for platform
     features: Feature[],
     feature_type: "slides" | "frames"
-    app: DocumentReference
+    version: DocumentReference
 }
 
 export interface Feature {
